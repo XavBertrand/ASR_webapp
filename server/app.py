@@ -171,14 +171,121 @@ def download_recording(filename):
         return jsonify({'error': 'Fichier non trouvé'}), 404
 
 
+def create_ssl_cert():
+    """Crée un certificat SSL auto-signé pour le développement"""
+    import ssl
+    from datetime import datetime, timedelta
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import ipaddress
+        import socket
+
+        # Générer une clé privée
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+
+        # Obtenir l'IP locale
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+
+        # Créer le certificat
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Jetson ASR Dev"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        ])
+
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.utcnow()
+        ).not_valid_after(
+            datetime.utcnow() + timedelta(days=365)
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName("localhost"),
+                x509.DNSName("*.localhost"),
+                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                x509.IPAddress(ipaddress.IPv4Address(local_ip)),
+            ]),
+            critical=False,
+        ).sign(key, hashes.SHA256())
+
+        # Sauvegarder les fichiers
+        os.makedirs('ssl', exist_ok=True)
+
+        with open('ssl/cert.pem', 'wb') as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        with open('ssl/key.pem', 'wb') as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+
+        logger.info("Certificats SSL créés dans le dossier ssl/")
+        return True
+
+    except ImportError:
+        logger.warning("Module cryptography non installé - HTTPS non disponible")
+        logger.info("Pour installer: pip install cryptography")
+        return False
+    except Exception as e:
+        logger.error(f"Erreur création certificat SSL: {e}")
+        return False
+
+
 if __name__ == '__main__':
     print("🎤 Démarrage du serveur Jetson ASR...")
     print(f"📁 Dossier d'upload: {os.path.abspath(UPLOAD_FOLDER)}")
-    print(f"🌐 Interface web: http://localhost:8000")
-    print(f"🏥 Health check: http://localhost:8000/health")
 
-    app.run(
-        host='0.0.0.0',  # Accessible depuis le réseau local
-        port=8000,
-        debug=True
-    )
+    # Tenter de créer les certificats SSL
+    ssl_available = False
+    if not os.path.exists('ssl/cert.pem') or not os.path.exists('ssl/key.pem'):
+        ssl_available = create_ssl_cert()
+    else:
+        ssl_available = True
+
+    # Déterminer l'IP locale
+    import socket
+
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+
+    if ssl_available and os.path.exists('ssl/cert.pem'):
+        print(f"🔒 HTTPS Interface: https://localhost:8000")
+        print(f"📱 HTTPS Mobile:    https://{local_ip}:8000")
+        print(f"🏥 Health check:    https://localhost:8000/health")
+        print("⚠️  Accepter le certificat auto-signé dans le navigateur")
+
+        # Lancer avec SSL
+        context = ('ssl/cert.pem', 'ssl/key.pem')
+        app.run(
+            host='0.0.0.0',
+            port=8000,
+            debug=True,
+            ssl_context=context
+        )
+    else:
+        print(f"⚠️  HTTP Interface:  http://localhost:8000")
+        print(f"⚠️  HTTP Mobile:     http://{local_ip}:8000")
+        print(f"🏥 Health check:    http://localhost:8000/health")
+        print("⚠️  ATTENTION: L'enregistrement audio ne marchera pas sur mobile sans HTTPS")
+
+        app.run(
+            host='0.0.0.0',
+            port=8000,
+            debug=True
+        )
