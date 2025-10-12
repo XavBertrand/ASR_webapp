@@ -1,0 +1,29 @@
+[project]
+name = "asr-webapp"
+version = "0.1.0"
+description = "Web application frontend/backend for Jetson ASR service"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "python-multipart",   # pour upload de fichiers
+  "websockets",
+  "pydantic>=2",
+  "aiohttp",
+  "requests"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "httpx",
+  "ruff",
+  "black",
+  "mypy"
+]
+
+[tool.uv]
+# Active le venv local ./.venv automatiquement
+index-strategy = "eager"
