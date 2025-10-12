@@ -11,7 +11,10 @@ dependencies = [
   "websockets",
   "pydantic>=2",
   "aiohttp",
-  "requests"
+  "requests",
+  "flask",
+  "flask-cors",
+  "werkzeug",
 ]
 
 [project.optional-dependencies]
