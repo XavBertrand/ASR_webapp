@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enregistreur Jetson ASR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(102, 126, 234, 0.12);
+            border-radius: 18px;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+        }
+
+        .logo img {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+
+        .record-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .record-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(255,107,107,0.3);
+        }
+
+        .record-btn.recording {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            animation: pulse 1.5s infinite;
+        }
+
+        .record-btn.stopped {
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+        }
+
+        .record-btn.paused {
+            background: linear-gradient(135deg, #f7b733, #fc4a1a);
+            box-shadow: 0 10px 25px rgba(252, 74, 26, 0.35);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255,107,107,0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(255,107,107,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,107,107,0); }
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .status.ready { background: #e8f5e8; color: #2e7d2e; }
+        .status.recording { background: #fff3cd; color: #856404; }
+        .status.processing { background: #d1ecf1; color: #0c5460; }
+        .status.complete { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.paused { background: #e8eaf6; color: #303f9f; }
+
+        .timer {
+            font-size: 1.5em;
+            font-weight: 300;
+            color: #666;
+            margin: 15px 0;
+        }
+
+        .primary-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            margin: 10px 0 25px;
+            flex-wrap: wrap;
+        }
+
+        .pause-btn {
+            background: linear-gradient(135deg, #4ecdc4, #2AB7CA);
+            color: white;
+            border: none;
+            padding: 18px 24px;
+            border-radius: 16px;
+            font-size: 1em;
+            min-width: 180px;
+            box-shadow: 0 10px 25px rgba(46, 204, 196, 0.35);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .pause-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(46, 204, 196, 0.4);
+        }
+
+        .pause-btn:disabled {
+            background: #d9e6e5;
+            color: #7a8a89;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .pause-btn.resume {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            box-shadow: 0 12px 30px rgba(102, 126, 234, 0.35);
+        }
+
+        .controls {
+            margin: 10px 0 30px;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 0 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .audio-preview {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .audio-preview.show {
+            display: block;
+        }
+
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .upload-progress {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .upload-progress.show {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .file-info {
+            text-align: left;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            .record-btn {
+                width: 100px;
+                height: 100px;
+            }
+
+            .primary-controls {
+                gap: 12px;
+            }
+
+            .pause-btn {
+                width: 100%;
+            }
+
+            .btn {
+                display: block;
+                width: 100%;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="logo.png" alt="Logo ASR">
+        </div>
+        <h1>ACTION AVOCATS</h1>
+
+        <div class="status ready" id="status">
+            Prêt à enregistrer
+        </div>
+
+        <div class="timer" id="timer">00:00</div>
+
+        <div class="primary-controls">
+            <button class="record-btn" id="recordBtn">
+                <span id="recordText">Enregistrer</span>
+            </button>
+            <button class="pause-btn" id="pauseBtn" disabled>⏸️ Pause</button>
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="playBtn" disabled>▶️ Écouter</button>
+            <button class="btn" id="downloadBtn" disabled>💾 Télécharger</button>
+            <button class="btn" id="uploadBtn" disabled>📤 Envoyer au Jetson</button>
+        </div>
+
+        <div class="upload-progress" id="uploadProgress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="audio-preview" id="audioPreview">
+            <h3>Aperçu de l'enregistrement</h3>
+            <audio controls id="audioPlayer"></audio>
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <strong>Informations du fichier :</strong><br>
+            <span id="fileDetails"></span>
+        </div>
+    </div>
+
+    <script>
+        class AudioRecorder {
+            constructor() {
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.audioBlob = null;
+                this.stream = null;
+                this.isRecording = false;
+                this.isPaused = false;
+                this.startTime = null;
+                this.timerInterval = null;
+                this.elapsedBeforePause = 0;
+
+                // Configuration
+                // this.jetsonUrl = 'http://localhost:8000'; // À modifier selon votre config
+                this.jetsonUrl = ''; // vide = même origine (https://localhost:8443)
+
+                this.initElements();
+                this.bindEvents();
+                this.checkBrowserSupport();
+            }
+
+            initElements() {
+                this.recordBtn = document.getElementById('recordBtn');
+                this.recordText = document.getElementById('recordText');
+                this.status = document.getElementById('status');
+                this.timer = document.getElementById('timer');
+                this.pauseBtn = document.getElementById('pauseBtn');
+                this.playBtn = document.getElementById('playBtn');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.uploadBtn = document.getElementById('uploadBtn');
+                this.audioPreview = document.getElementById('audioPreview');
+                this.audioPlayer = document.getElementById('audioPlayer');
+                this.uploadProgress = document.getElementById('uploadProgress');
+                this.progressBar = document.getElementById('progressBar');
+                this.fileInfo = document.getElementById('fileInfo');
+                this.fileDetails = document.getElementById('fileDetails');
+            }
+
+            bindEvents() {
+                this.recordBtn.addEventListener('click', () => this.toggleRecording());
+                this.pauseBtn.addEventListener('click', () => this.togglePause());
+                this.playBtn.addEventListener('click', () => this.playAudio());
+                this.downloadBtn.addEventListener('click', () => this.downloadAudio());
+                this.uploadBtn.addEventListener('click', () => this.uploadToJetson());
+            }
+
+            checkBrowserSupport() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    this.updateStatus('Votre navigateur ne supporte pas l\'enregistrement audio', 'error');
+                    this.recordBtn.disabled = true;
+                    return false;
+                }
+                return true;
+            }
+
+            async toggleRecording() {
+                if (!this.isRecording) {
+                    await this.startRecording();
+                } else {
+                    this.stopRecording();
+                }
+            }
+
+            togglePause() {
+                if (!this.isRecording) return;
+                if (!this.isPaused) {
+                    this.pauseRecording();
+                } else {
+                    this.resumeRecording();
+                }
+            }
+
+            pauseRecording() {
+                if (!this.mediaRecorder || this.isPaused) return;
+
+                this.mediaRecorder.pause();
+                this.isPaused = true;
+                if (this.startTime) {
+                    this.elapsedBeforePause += Date.now() - this.startTime;
+                }
+                this.startTime = null;
+
+                this.stopTimer();
+                this.updateTimerDisplay(this.elapsedBeforePause);
+
+                this.recordBtn.classList.remove('recording');
+                this.recordBtn.classList.add('paused');
+                this.recordText.textContent = 'En pause';
+                this.pauseBtn.textContent = '▶️ Reprendre';
+                this.pauseBtn.classList.add('resume');
+                this.updateStatus('Enregistrement en pause', 'paused');
+            }
+
+            resumeRecording() {
+                if (!this.mediaRecorder || !this.isPaused) return;
+
+                this.mediaRecorder.resume();
+                this.isPaused = false;
+                this.startTime = Date.now();
+                this.startTimer();
+
+                this.recordBtn.classList.add('recording');
+                this.recordBtn.classList.remove('paused');
+                this.recordText.textContent = 'Arrêter';
+                this.pauseBtn.textContent = '⏸️ Pause';
+                this.pauseBtn.classList.remove('resume');
+                this.updateStatus('Enregistrement en cours...', 'recording');
+            }
+
+            async startRecording() {
+                try {
+                    // Demander l'accès au microphone
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 44100,
+                            channelCount: 1,
+                            volume: 1.0
+                        }
+                    });
+
+                    // Créer le MediaRecorder
+                    const options = {
+                        mimeType: 'audio/webm;codecs=opus'
+                    };
+
+                    // Fallback pour Safari
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options.mimeType = 'audio/mp4';
+                    }
+
+                    this.mediaRecorder = new MediaRecorder(this.stream, options);
+                    this.audioChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                    };
+
+                    // Démarrer l'enregistrement
+                    this.elapsedBeforePause = 0;
+                    this.isPaused = false;
+                    this.recordBtn.classList.remove('stopped', 'paused');
+                    this.pauseBtn.disabled = false;
+                    this.pauseBtn.textContent = '⏸️ Pause';
+                    this.pauseBtn.classList.remove('resume');
+
+                    this.mediaRecorder.start(100); // Collecter les données toutes les 100ms
+                    this.isRecording = true;
+                    this.startTime = Date.now();
+
+                    // Mettre à jour l'interface
+                    this.recordBtn.classList.add('recording');
+                    this.recordText.textContent = 'Arrêter';
+                    this.updateStatus('Enregistrement en cours...', 'recording');
+
+                    // Démarrer le timer
+                    this.startTimer();
+
+                } catch (error) {
+                    console.error('Erreur lors du démarrage de l\'enregistrement:', error);
+                    this.updateStatus('Erreur d\'accès au microphone', 'error');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    if (!this.isPaused && this.startTime) {
+                        this.elapsedBeforePause += Date.now() - this.startTime;
+                    }
+
+                    this.stopTimer();
+                    this.updateTimerDisplay(this.elapsedBeforePause);
+
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.isPaused = false;
+                    this.startTime = null;
+
+                    // Arrêter le stream
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                    }
+
+                    // Mettre à jour l'interface
+                    this.recordBtn.classList.remove('recording', 'paused');
+                    this.recordBtn.classList.add('stopped');
+                    this.recordText.textContent = 'Nouveau';
+
+                    this.pauseBtn.disabled = true;
+                    this.pauseBtn.textContent = '⏸️ Pause';
+                    this.pauseBtn.classList.remove('resume');
+
+                    this.updateStatus('Traitement de l\'enregistrement...', 'processing');
+                }
+            }
+
+            processRecording() {
+                // Créer le blob audio
+                this.audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+
+                // Créer l'URL pour l'aperçu
+                const audioUrl = URL.createObjectURL(this.audioBlob);
+                this.audioPlayer.src = audioUrl;
+
+                // Activer les contrôles
+                this.playBtn.disabled = false;
+                this.downloadBtn.disabled = false;
+                this.uploadBtn.disabled = false;
+
+                // Afficher l'aperçu
+                this.audioPreview.classList.add('show');
+
+                // Afficher les informations du fichier
+                this.showFileInfo();
+
+                this.updateStatus('Enregistrement terminé !', 'complete');
+            }
+
+            playAudio() {
+                if (this.audioPlayer.src) {
+                    this.audioPlayer.play();
+                }
+            }
+
+            downloadAudio() {
+                if (this.audioBlob) {
+                    const url = URL.createObjectURL(this.audioBlob);
+                    const a = document.createElement('a');
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    a.href = url;
+                    a.download = `enregistrement-${timestamp}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            }
+
+            async uploadToJetson() {
+                if (!this.audioBlob) return;
+
+                try {
+                    this.updateStatus('Envoi vers le Jetson...', 'processing');
+                    this.uploadProgress.classList.add('show');
+                    this.uploadBtn.disabled = true;
+
+                    const formData = new FormData();
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    formData.append('file', this.audioBlob, `recording-${timestamp}.webm`);
+                    formData.append('timestamp', timestamp);
+
+                    const send = (authHeader = null) => new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', `${this.jetsonUrl}/upload`); // <-- /upload (et plus /upload-audio)
+                        if (authHeader) {
+                            xhr.setRequestHeader('Authorization', authHeader);
+                        }
+
+                        xhr.upload.onprogress = (event) => {
+                            if (event.lengthComputable) {
+                                const percent = (event.loaded / event.total) * 100;
+                                this.progressBar.style.width = percent + '%';
+                            }
+                        };
+
+                        xhr.onload = () => {
+                            if (xhr.status === 200 || xhr.status === 201) {
+                                resolve(xhr.responseText);
+                            } else if (xhr.status === 401 && !authHeader) {
+                                // Demande login/mdp puis retry une seule fois avec Authorization
+                                const user = prompt("Nom d'utilisateur (Basic Auth) :");
+                                const pass = prompt("Mot de passe :");
+                                if (user && pass) {
+                                    const auth = 'Basic ' + btoa(`${user}:${pass}`);
+                                    send(auth).then(resolve).catch(reject);
+                                } else {
+                                    reject(new Error('Authentification requise'));
+                                }
+                            } else {
+                                reject(new Error(`Erreur serveur: ${xhr.status} ${xhr.responseText || ''}`));
+                            }
+                        };
+
+                        xhr.onerror = () => reject(new Error('Erreur de connexion au Jetson'));
+                        xhr.send(formData);
+                    });
+
+                    await send(); // premier essai sans header, puis retry automatique si 401
+                    this.updateStatus('✅ Envoi réussi !', 'complete');
+                    this.progressBar.style.width = '100%';
+
+                    // (Optionnel) reset progress / interface un peu plus tard
+                    setTimeout(() => this.resetInterface(), 1500);
+
+                } catch (error) {
+                    console.error('Erreur lors de l\'upload:', error);
+                    this.updateStatus(`Erreur: ${error.message}`, 'error');
+                    this.uploadBtn.disabled = false;
+                    this.uploadProgress.classList.remove('show');
+                }
+            }
+
+            getElapsedTime() {
+                const active = (!this.isPaused && this.isRecording && this.startTime)
+                    ? Date.now() - this.startTime
+                    : 0;
+                return this.elapsedBeforePause + active;
+            }
+
+            updateTimerDisplay(elapsedMs = this.getElapsedTime()) {
+                const minutes = Math.floor(elapsedMs / 60000);
+                const seconds = Math.floor((elapsedMs % 60000) / 1000);
+                this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            startTimer() {
+                this.stopTimer();
+                this.updateTimerDisplay();
+                this.timerInterval = setInterval(() => this.updateTimerDisplay(), 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            updateStatus(message, type) {
+                this.status.textContent = message;
+                this.status.className = `status ${type}`;
+            }
+
+            showFileInfo() {
+                if (this.audioBlob) {
+                    const sizeKB = (this.audioBlob.size / 1024).toFixed(2);
+                    const duration = this.timer.textContent;
+                    this.fileDetails.innerHTML = `
+                        Taille: ${sizeKB} KB<br>
+                        Durée: ${duration}<br>
+                        Type: ${this.audioBlob.type}<br>
+                        Créé: ${new Date().toLocaleString()}
+                    `;
+                    this.fileInfo.classList.add('show');
+                }
+            }
+
+            resetInterface() {
+                setTimeout(() => {
+                    this.stopTimer();
+                    this.elapsedBeforePause = 0;
+                    this.startTime = null;
+                    this.isPaused = false;
+                    this.recordBtn.classList.remove('stopped', 'paused', 'recording');
+                    this.recordText.textContent = 'Enregistrer';
+                    this.updateTimerDisplay(0);
+                    this.playBtn.disabled = true;
+                    this.downloadBtn.disabled = true;
+                    this.uploadBtn.disabled = false;
+                    this.pauseBtn.disabled = true;
+                    this.pauseBtn.textContent = '⏸️ Pause';
+                    this.pauseBtn.classList.remove('resume');
+                    this.audioPreview.classList.remove('show');
+                    this.fileInfo.classList.remove('show');
+                    this.uploadProgress.classList.remove('show');
+                    this.progressBar.style.width = '0%';
+                    this.updateStatus('Prêt à enregistrer', 'ready');
+                }, 2000);
+            }
+        }
+
+        // Initialiser l'application
+        document.addEventListener('DOMContentLoaded', () => {
+            new AudioRecorder();
+        });
+    </script>
+</body>
+</html>
