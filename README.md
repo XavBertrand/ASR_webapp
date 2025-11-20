@@ -96,6 +96,21 @@ In the frontend, you may need to set:
 
 ### Running
 
+You can launch everything (virtualenv, dependencies, Gunicorn server bound to `0.0.0.0:8000`) with:
+
+```bash
+python launch_server.py
+```
+
+Environment variables `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, and `GUNICORN_TIMEOUT` let you adjust the listener and worker count if needed.  
+To chain the Caddy reverse proxy (e.g. for DuckDNS/HTTPS), pass the Caddyfile path:
+
+```bash
+python launch_server.py --caddyfile ../Caddyfile.local
+```
+
+Use `--caddyfile ../Caddyfile.public` for the public DuckDNS config (requires running the script with sufficient privileges to bind :80/:443 or a `setcap`-enabled Caddy binary). `--caddy-bin /full/path/to/caddy` overrides the binary if it is not on PATH.
+
 You can use the provided scripts to launch the app:
 
 - **Unix / Linux / macOS**:
@@ -125,6 +140,74 @@ npm start
 ```
 
 Then open your browser to `http://localhost:PORT` (default port defined in server/frontend config).
+
+#### Production via Docker (Caddy + DuckDNS automation)
+
+The provided `Dockerfile` now reproduces the full setup described in `SETUP_SERVER_FULL.md` (Gunicorn + Caddy HTTPS reverse proxy + optional DuckDNS cron). This keeps the host configuration minimal (only port-forwarding on the Livebox is assumed).
+
+1. Build the image:
+   ```bash
+   docker build -t asr-webapp:latest .
+   ```
+2. Create an `.env` file with at least the public domain and credentials:
+   ```bash
+   cat <<'EOF' > .env
+   CADDY_DOMAIN=ai-actionavocats.duckdns.org
+   CADDY_EMAIL=you@example.com
+   BASIC_AUTH_USER=xavier
+   BASIC_AUTH_PASSWORD=StrongPasswordHere
+   DUCKDNS_DOMAIN=ai-actionavocats
+   DUCKDNS_TOKEN=YOUR_DUCKDNS_TOKEN
+   EOF
+   ```
+3. Run the container (either with `--network host` or by publishing the ports):
+   ```bash
+   # Option A – Linux host with host networking
+   docker run -d \
+     --name asr-webapp \
+     --network host \
+     --env-file .env \
+     -v asr-recordings:/data/recordings \
+     -v caddy-data:/root/.local/share/caddy \
+     -v caddy-config:/root/.config/caddy \
+     asr-webapp:latest
+
+   # Option B – WSL2 / Windows: publish the ports explicitly
+   docker run -d \
+     --name asr-webapp \
+     --env-file .env \
+     -p 80:80 -p 443:443 -p 8000:8000 \
+     -v asr-recordings:/data/recordings \
+     -v caddy-data:/root/.local/share/caddy \
+     -v caddy-config:/root/.config/caddy \
+     asr-webapp:latest
+   ```
+   When running under WSL2, remember that Windows still needs the `netsh interface portproxy` rules from `SETUP_SERVER_FULL.md` so that traffic reaching Windows on 80/443 is forwarded to WSL/Docker.
+
+Environment variables recognized by the image:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `CADDY_DOMAIN` | Public hostname (DuckDNS domain) served by Caddy | `localhost` |
+| `CADDY_EMAIL` | Optional email for Let’s Encrypt / ACME | empty |
+| `BASIC_AUTH_USER` | Username for HTTP Basic Auth | `xavier` |
+| `BASIC_AUTH_PASSWORD` | Plaintext password (hash generated automatically) | `MyPassword` |
+| `BASIC_AUTH_PASSWORD_HASH` | Precomputed hash (overrides plaintext) | empty |
+| `BASIC_AUTH_EXTRA_USERS` | Extra `username hash` pairs separated by `;` | empty |
+| `DUCKDNS_DOMAIN` / `DUCKDNS_TOKEN` | Enable automatic DuckDNS IP updates from inside the container | disabled |
+| `DUCKDNS_INTERVAL` | Seconds between DuckDNS refresh | `300` |
+| `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` | Gunicorn tuning | `0.0.0.0`, `8000`, `4`, `4`, `300` |
+| `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/data/recordings`) | `/data/recordings` |
+
+With these settings the image automatically:
+
+- Installs Python deps, Gunicorn, ffmpeg, Caddy.
+- Runs Gunicorn serving `server.app:app`.
+- Serves the `webapp/` static bundle via Caddy with HTTPS + HTTP/3.
+- Configures HTTP Basic Auth exactly like the manual Caddyfile in `SETUP_SERVER_FULL.md`.
+- Optionally keeps the DuckDNS IP fresh via the same cron URL as in the guide.
+
+This reduces manual host steps to: providing environment variables, ensuring the Livebox forwards 80/443 to the Docker host, and running `docker run`.
 
 ## Usage
 
