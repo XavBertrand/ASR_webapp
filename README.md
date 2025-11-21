@@ -167,9 +167,9 @@ The provided `Dockerfile` now reproduces the full setup described in `SETUP_SERV
      --name asr-webapp \
      --network host \
      --env-file .env \
-     -v asr-recordings:/data/recordings \
+     -v "$(pwd)/recordings:/app/recordings" \
      -v caddy-data:/root/.local/share/caddy \
-     -v caddy-config:/root/.config/caddy \
+      -v caddy-config:/root/.config/caddy \
      asr-webapp:latest
 
    # Option B – WSL2 / Windows: publish the ports explicitly
@@ -177,9 +177,9 @@ The provided `Dockerfile` now reproduces the full setup described in `SETUP_SERV
      --name asr-webapp \
      --env-file .env \
      -p 80:80 -p 443:443 -p 8000:8000 \
-     -v asr-recordings:/data/recordings \
+     -v "$(pwd)/recordings:/app/recordings" \
      -v caddy-data:/root/.local/share/caddy \
-     -v caddy-config:/root/.config/caddy \
+      -v caddy-config:/root/.config/caddy \
      asr-webapp:latest
    ```
    When running under WSL2, remember that Windows still needs the `netsh interface portproxy` rules from `SETUP_SERVER_FULL.md` so that traffic reaching Windows on 80/443 is forwarded to WSL/Docker.
@@ -197,7 +197,9 @@ Environment variables recognized by the image:
 | `DUCKDNS_DOMAIN` / `DUCKDNS_TOKEN` | Enable automatic DuckDNS IP updates from inside the container | disabled |
 | `DUCKDNS_INTERVAL` | Seconds between DuckDNS refresh | `300` |
 | `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` | Gunicorn tuning | `0.0.0.0`, `8000`, `4`, `4`, `300` |
-| `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/data/recordings`) | `/data/recordings` |
+| `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/app/recordings`) | `/app/recordings` |
+
+The container also maintains a compatibility symlink `/data/recordings` -> `/app/recordings`, so old volume names continue to work, but new deployments should mount `/app/recordings` on the host to retrieve uploads easily.
 
 With these settings the image automatically:
 

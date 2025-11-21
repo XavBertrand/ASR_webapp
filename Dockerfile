@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UPLOAD_FOLDER=/data/recordings
+    UPLOAD_FOLDER=/app/recordings
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r server/requirements.txt \
  && pip install --no-cache-dir gunicorn flask-cors requests
 
-RUN mkdir -p /data/recordings && chmod 755 /app/docker/*.sh
+RUN mkdir -p /app/recordings /data/recordings && ln -sfn /app/recordings /data/recordings && chmod 755 /app/docker/*.sh
 
 EXPOSE 80 443 8000
 
