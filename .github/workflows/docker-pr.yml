@@ -28,6 +28,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Ensure Docker Hub secrets are present (pushable contexts only)
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if [[ -z "${DOCKERHUB_USERNAME:-}" || -z "${DOCKERHUB_TOKEN:-}" ]]; then
+            echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are missing; cannot push image."
+            exit 1
+          fi
+
       - name: Set up QEMU (arm64)
         uses: docker/setup-qemu-action@v3
 
