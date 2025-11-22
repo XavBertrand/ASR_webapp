@@ -190,7 +190,7 @@
                 <div class="dot" id="statusDot"></div>
                 <div>
                     <div class="status-label" id="statusLabel">Pret a enregistrer</div>
-                    <div class="status-hint" id="statusHint">Touchez le bouton micro pour demarrer.</div>
+                    <div class="status-hint" id="statusHint"></div>
                 </div>
             </div>
 
@@ -655,12 +655,12 @@
             updateStatus(message, type) {
                 this.statusLabel.textContent = message;
                 const hints = {
-                    ready: 'Touchez le bouton micro pour demarrer.',
-                    recording: 'Appuyez sur pause ou stop quand vous avez fini.',
-                    paused: 'Reprenez ou stoppez pour valider.',
-                    processing: 'Patientez quelques secondes...',
-                    complete: 'Pret pour lecture, telechargement ou envoi.',
-                    error: 'Un probleme est survenu, recommencez.'
+                    ready: '',
+                    recording: '',
+                    paused: '',
+                    processing: '',
+                    complete: '',
+                    error: ''
                 };
                 this.statusHint.textContent = hints[type] || '';
 
