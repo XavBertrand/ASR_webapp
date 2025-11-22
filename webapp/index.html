@@ -2,316 +2,387 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enregistreur Jetson ASR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Enregistreur ASR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg: #0b1220;
+            --card: #111827;
+            --stroke: #1f2937;
+            --text-main: #e5e7eb;
+            --text-sub: #9ca3af;
+            --primary: #60a5fa;
+            --primary-strong: #3b82f6;
+            --accent: #22d3ee;
+            --error: #ef4444;
+            --warn: #fbbf24;
+            --success: #22c55e;
         }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: radial-gradient(circle at 15% 20%, rgba(96,165,250,0.08), transparent 32%),
+                        radial-gradient(circle at 70% 0%, rgba(34,211,238,0.08), transparent 35%),
+                        var(--bg);
+            color: var(--text-main);
+            font-family: 'Roboto', sans-serif;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        header {
+            padding: 14px 18px;
+            background: rgba(15,23,42,0.85);
+            backdrop-filter: blur(6px);
+            border-bottom: 1px solid var(--stroke);
+            display: flex;
             align-items: center;
-            padding: 20px;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 500px;
-            width: 100%;
-            text-align: center;
-        }
+        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
+        .brand img { width: 42px; height: 42px; object-fit: contain; border-radius: 10px; background: #1f2937; padding: 8px; }
+        .brand small { display: block; font-weight: 500; color: var(--text-sub); }
 
-        .logo {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            color: #667eea;
-        }
+        .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
 
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            font-weight: 300;
-        }
+        main.page { flex: 1; padding: 18px; }
+        .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 
-        .record-btn {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            border: none;
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-            color: white;
-            font-size: 1.2em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 20px;
-            position: relative;
-            overflow: hidden;
+        .status-card {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 12px 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.04);
         }
+        .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--stroke); box-shadow: 0 0 0 rgba(0,0,0,0); transition: all 0.2s ease; flex-shrink: 0; }
+        .dot.recording { background: var(--error); box-shadow: 0 0 0 6px rgba(229,57,53,0.12); }
+        .dot.paused { background: var(--warn); box-shadow: 0 0 0 6px rgba(245,158,11,0.12); }
+        .dot.processing { background: var(--accent); box-shadow: 0 0 0 6px rgba(14,165,233,0.12); }
+        .dot.complete { background: var(--success); box-shadow: 0 0 0 6px rgba(22,163,74,0.12); }
+        .dot.error { background: var(--error); box-shadow: 0 0 0 6px rgba(229,57,53,0.12); }
+        .status-label { font-weight: 700; }
+        .status-hint { color: var(--text-sub); margin-top: 2px; font-size: 0.95rem; }
 
-        .record-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 20px rgba(255,107,107,0.3);
+        .timer { text-align: center; font-size: 3.1rem; font-weight: 700; letter-spacing: 1px; }
+
+        .visualizer { background: var(--card); border: 1px solid var(--stroke); border-radius: 12px; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); }
+        .visualizer canvas { width: 100%; height: 120px; }
+
+        .panel-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 132px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+            opacity: 0.6;
+            transition: opacity 0.2s ease;
         }
+        .panel.show { opacity: 1; }
+        .panel-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-weight: 600; color: var(--text-sub); }
+        .pill { padding: 4px 10px; border-radius: 999px; background: #1f2937; color: var(--text-main); font-size: 0.8rem; }
+        .muted { color: var(--text-sub); font-size: 0.95rem; margin-top: 10px; }
 
-        .record-btn.recording {
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            animation: pulse 1.5s infinite;
-        }
+        .audio-preview audio { width: 100%; margin-top: 10px; display: none; }
+        .audio-preview audio.show { display: block; }
 
-        .record-btn.stopped {
-            background: linear-gradient(135deg, #4ecdc4, #44a08d);
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255,107,107,0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(255,107,107,0); }
-            100% { box-shadow: 0 0 0 0 rgba(255,107,107,0); }
-        }
-
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 10px;
-            font-weight: 500;
-        }
-
-        .status.ready { background: #e8f5e8; color: #2e7d2e; }
-        .status.recording { background: #fff3cd; color: #856404; }
-        .status.processing { background: #d1ecf1; color: #0c5460; }
-        .status.complete { background: #d4edda; color: #155724; }
-        .status.error { background: #f8d7da; color: #721c24; }
-
-        .timer {
-            font-size: 1.5em;
-            font-weight: 300;
-            color: #666;
-            margin: 15px 0;
-        }
+        .progress-track { width: 100%; height: 10px; background: #1f2a3a; border-radius: 8px; overflow: hidden; margin: 10px 0; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width 0.2s ease; }
 
         .controls {
-            margin: 30px 0;
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15,23,42,0.94);
+            border-top: 1px solid var(--stroke);
+            box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
+            padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            max-width: 960px;
+            margin: 0 auto;
+            z-index: 12;
         }
 
         .btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
+            background: #141c2b;
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 10px 8px;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
             cursor: pointer;
-            margin: 0 10px;
-            font-size: 1em;
-            transition: all 0.3s ease;
+            transition: all 0.15s ease;
+            min-height: 78px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.14);
         }
+        .btn i { font-size: 24px; }
+        .btn span { font-size: 0.78rem; letter-spacing: 0.4px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; }
+        .btn:active { transform: translateY(1px); }
+        .btn:disabled { color: #606b7a; border-color: #1f2937; background: #0f1624; box-shadow: none; }
 
-        .btn:hover {
-            background: #5a67d8;
-            transform: translateY(-2px);
+        .btn-main {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #0b1220;
+            border: none;
+            box-shadow: 0 14px 32px rgba(34, 211, 238, 0.25);
         }
+        .btn-main span { color: #0b1220; font-weight: 700; }
+        .btn-main i { color: #0b1220; }
+        .btn-main:disabled { background: #1f2937; color: #6c7482; box-shadow: none; }
 
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
+        .loader-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6,9,15,0.82);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 50;
         }
+        .hidden { display: none !important; }
+        .loader-spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid #1f2937; border-top-color: var(--primary); animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .audio-preview {
-            margin: 20px 0;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            display: none;
-        }
-
-        .audio-preview.show {
-            display: block;
-        }
-
-        audio {
-            width: 100%;
-            margin: 10px 0;
-        }
-
-        .upload-progress {
-            width: 100%;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 15px 0;
-            display: none;
-        }
-
-        .upload-progress.show {
-            display: block;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .file-info {
-            text-align: left;
-            margin: 15px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9em;
-            display: none;
-        }
-
-        .file-info.show {
-            display: block;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                padding: 20px;
-            }
-
-            .record-btn {
-                width: 100px;
-                height: 100px;
-            }
-
-            .btn {
-                display: block;
-                width: 100%;
-                margin: 10px 0;
-            }
+        @media (max-width: 640px) {
+            main.page { padding: 14px; }
+            .timer { font-size: 2.6rem; }
+            .controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">🎤</div>
-        <h1>Enregistreur Jetson ASR</h1>
-
-        <div class="status ready" id="status">
-            Prêt à enregistrer
+    <header>
+        <div class="brand">
+            <img src="logo.png" alt="Logo">
+            <div>
+                <div>Action Avocats</div>
+                <small>Enregistreur ASR</small>
+            </div>
         </div>
+        <div class="lang">FR</div>
+    </header>
 
-        <div class="timer" id="timer">00:00</div>
+    <main class="page">
+        <div class="content">
+            <div class="status-card">
+                <div class="dot" id="statusDot"></div>
+                <div>
+                    <div class="status-label" id="statusLabel">Pret a enregistrer</div>
+                    <div class="status-hint" id="statusHint"></div>
+                </div>
+            </div>
 
-        <button class="record-btn" id="recordBtn">
-            <span id="recordText">Enregistrer</span>
+            <div class="timer" id="timer">00:00</div>
+
+            <div class="visualizer" id="visualizerContainer">
+                <canvas id="audioCanvas"></canvas>
+            </div>
+
+            <div class="panel-grid">
+                <div class="panel audio-preview" id="audioPreview">
+                    <div class="panel-head">
+                        <span>Apercu</span>
+                        <span class="pill">Audio</span>
+                    </div>
+                    <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
+                    <audio controls id="audioPlayer"></audio>
+                </div>
+
+                <div class="panel upload-progress" id="uploadProgress">
+                    <div class="panel-head">Envoi vers le serveur</div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <p class="muted" id="uploadHint">Pret a envoyer apres un enregistrement.</p>
+                </div>
+
+                <div class="panel file-info" id="fileInfo">
+                    <div class="panel-head">Informations fichier</div>
+                    <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="controls">
+        <button class="btn" id="btnTrash" disabled>
+            <i class="material-icons">delete_outline</i>
+            <span>Vider</span>
         </button>
 
-        <div class="controls">
-            <button class="btn" id="playBtn" disabled>▶️ Écouter</button>
-            <button class="btn" id="downloadBtn" disabled>💾 Télécharger</button>
-            <button class="btn" id="uploadBtn" disabled>📤 Envoyer au Jetson</button>
-        </div>
+        <button class="btn" id="btnStop" disabled>
+            <i class="material-icons">stop</i>
+            <span>Stop</span>
+        </button>
 
-        <div class="upload-progress" id="uploadProgress">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
+        <button class="btn btn-main" id="btnMain">
+            <i class="material-icons" id="mainIcon">mic</i>
+            <span>Micro</span>
+        </button>
 
-        <div class="audio-preview" id="audioPreview">
-            <h3>Aperçu de l'enregistrement</h3>
-            <audio controls id="audioPlayer"></audio>
-        </div>
+        <button class="btn" id="btnPlay" disabled>
+            <i class="material-icons">play_arrow</i>
+            <span>Ecouter</span>
+        </button>
 
-        <div class="file-info" id="fileInfo">
-            <strong>Informations du fichier :</strong><br>
-            <span id="fileDetails"></span>
-        </div>
+        <button class="btn" id="btnDownload" disabled>
+            <i class="material-icons">download</i>
+            <span>Telecharger</span>
+        </button>
+
+        <button class="btn" id="btnUpload" disabled>
+            <i class="material-icons">cloud_upload</i>
+            <span>Envoyer</span>
+        </button>
+    </div>
+
+    <div class="loader-overlay hidden" id="loader">
+        <div class="loader-spinner"></div>
+        <p style="color:var(--text-main); font-weight: 600;">Traitement...</p>
     </div>
 
     <script>
-        class AudioRecorder {
+        class RecorderApp {
             constructor() {
                 this.mediaRecorder = null;
                 this.audioChunks = [];
                 this.audioBlob = null;
                 this.stream = null;
-                this.isRecording = false;
+                this.audioCtx = null;
+                this.analyser = null;
+                this.dataArray = null;
+                this.animationId = null;
+                this.isPaused = false;
                 this.startTime = null;
+                this.elapsedBeforePause = 0;
                 this.timerInterval = null;
-
-                // Configuration
-                this.jetsonUrl = 'http://localhost:8000'; // À modifier selon votre config
+                this.state = 'idle';
+                this.mimeType = 'audio/webm';
+                this.jetsonUrl = '';
+                this.baseUploadUrl = this.resolveBaseUrl();
 
                 this.initElements();
                 this.bindEvents();
-                this.checkBrowserSupport();
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+
+                if (!this.checkBrowserSupport()) return;
+                this.updateStatus('Pret a enregistrer', 'ready');
+                this.updateUI();
             }
 
             initElements() {
-                this.recordBtn = document.getElementById('recordBtn');
-                this.recordText = document.getElementById('recordText');
-                this.status = document.getElementById('status');
+                this.btnMain = document.getElementById('btnMain');
+                this.mainIcon = document.getElementById('mainIcon');
+                this.btnStop = document.getElementById('btnStop');
+                this.btnTrash = document.getElementById('btnTrash');
+                this.btnPlay = document.getElementById('btnPlay');
+                this.btnUpload = document.getElementById('btnUpload');
+                this.btnDownload = document.getElementById('btnDownload');
                 this.timer = document.getElementById('timer');
-                this.playBtn = document.getElementById('playBtn');
-                this.downloadBtn = document.getElementById('downloadBtn');
-                this.uploadBtn = document.getElementById('uploadBtn');
+                this.statusDot = document.getElementById('statusDot');
+                this.statusLabel = document.getElementById('statusLabel');
+                this.statusHint = document.getElementById('statusHint');
+                this.canvas = document.getElementById('audioCanvas');
+                this.vizContainer = document.getElementById('visualizerContainer');
                 this.audioPreview = document.getElementById('audioPreview');
                 this.audioPlayer = document.getElementById('audioPlayer');
+                this.previewEmpty = document.getElementById('previewEmpty');
                 this.uploadProgress = document.getElementById('uploadProgress');
+                this.uploadHint = document.getElementById('uploadHint');
                 this.progressBar = document.getElementById('progressBar');
                 this.fileInfo = document.getElementById('fileInfo');
                 this.fileDetails = document.getElementById('fileDetails');
+                this.loader = document.getElementById('loader');
+                this.canvasCtx = this.canvas.getContext('2d');
             }
 
             bindEvents() {
-                this.recordBtn.addEventListener('click', () => this.toggleRecording());
-                this.playBtn.addEventListener('click', () => this.playAudio());
-                this.downloadBtn.addEventListener('click', () => this.downloadAudio());
-                this.uploadBtn.addEventListener('click', () => this.uploadToJetson());
+                this.btnMain.addEventListener('click', () => this.handleMainAction());
+                this.btnStop.addEventListener('click', () => this.handleStop());
+                this.btnTrash.addEventListener('click', () => this.resetInterface());
+                this.btnPlay.addEventListener('click', () => this.playAudio());
+                this.btnUpload.addEventListener('click', () => this.uploadToJetson());
+                this.btnDownload.addEventListener('click', () => this.downloadAudio());
+            }
+
+            resolveBaseUrl() {
+                const configured = (this.jetsonUrl || '').trim().replace(/\/+$/, '');
+                if (configured) return configured;
+                if (window.location?.origin && window.location.origin !== 'null') {
+                    return window.location.origin;
+                }
+                return '';
+            }
+
+            buildUrl(path) {
+                const cleanPath = path.startsWith('/') ? path : `/${path}`;
+                if (!this.baseUploadUrl) return cleanPath;
+                return `${this.baseUploadUrl}${cleanPath}`;
             }
 
             checkBrowserSupport() {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    this.updateStatus('Votre navigateur ne supporte pas l\'enregistrement audio', 'error');
-                    this.recordBtn.disabled = true;
+                    this.updateStatus('Votre navigateur ne supporte pas lenregistrement audio', 'error');
+                    this.btnMain.disabled = true;
                     return false;
                 }
                 return true;
             }
 
-            async toggleRecording() {
-                if (!this.isRecording) {
+            async handleMainAction() {
+                if (this.state === 'idle' || this.state === 'finished') {
                     await this.startRecording();
-                } else {
+                } else if (this.state === 'recording') {
+                    this.pauseRecording();
+                } else if (this.state === 'paused') {
+                    this.resumeRecording();
+                }
+            }
+
+            handleStop() {
+                if (this.state === 'recording' || this.state === 'paused') {
                     this.stopRecording();
                 }
             }
 
             async startRecording() {
                 try {
-                    // Demander l'accès au microphone
+                    this.resetInterface(false);
+
                     this.stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            sampleRate: 44100,
-                            channelCount: 1,
-                            volume: 1.0
-                        }
+                        audio: { sampleRate: 44100, channelCount: 1, volume: 1.0 }
                     });
 
-                    // Créer le MediaRecorder
-                    const options = {
-                        mimeType: 'audio/webm;codecs=opus'
-                    };
+                    this.setupAudioGraph();
 
-                    // Fallback pour Safari
+                    const options = { mimeType: 'audio/webm;codecs=opus' };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                         options.mimeType = 'audio/mp4';
                     }
-
+                    this.mimeType = options.mimeType;
                     this.mediaRecorder = new MediaRecorder(this.stream, options);
                     this.audioChunks = [];
 
@@ -325,67 +396,94 @@
                         this.processRecording();
                     };
 
-                    // Démarrer l'enregistrement
-                    this.mediaRecorder.start(100); // Collecter les données toutes les 100ms
-                    this.isRecording = true;
+                    this.mediaRecorder.start(100);
+                    this.state = 'recording';
+                    this.isPaused = false;
+                    this.elapsedBeforePause = 0;
                     this.startTime = Date.now();
 
-                    // Mettre à jour l'interface
-                    this.recordBtn.classList.add('recording');
-                    this.recordText.textContent = 'Arrêter';
-                    this.updateStatus('Enregistrement en cours...', 'recording');
-
-                    // Démarrer le timer
+                    this.updateStatus('Enregistrement en cours', 'recording');
                     this.startTimer();
-
+                    this.drawVisualizer();
+                    this.updateUI();
                 } catch (error) {
-                    console.error('Erreur lors du démarrage de l\'enregistrement:', error);
-                    this.updateStatus('Erreur d\'accès au microphone', 'error');
+                    console.error('Erreur lors du demarrage de lenregistrement:', error);
+                    this.updateStatus('Erreur dacces au microphone', 'error');
                 }
             }
 
-            stopRecording() {
-                if (this.mediaRecorder && this.isRecording) {
-                    this.mediaRecorder.stop();
-                    this.isRecording = false;
+            setupAudioGraph() {
+                if (this.audioCtx && this.audioCtx.state !== 'closed') {
+                    this.audioCtx.close();
+                }
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioCtx.createAnalyser();
+                const microphone = this.audioCtx.createMediaStreamSource(this.stream);
+                microphone.connect(this.analyser);
+                this.analyser.fftSize = 256;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+            }
 
-                    // Arrêter le stream
-                    if (this.stream) {
-                        this.stream.getTracks().forEach(track => track.stop());
+            pauseRecording() {
+                if (!this.mediaRecorder || this.state !== 'recording') return;
+
+                this.mediaRecorder.pause();
+                this.isPaused = true;
+                this.elapsedBeforePause += Date.now() - this.startTime;
+                this.startTime = null;
+                this.state = 'paused';
+
+                this.stopTimer();
+                this.stopVisualizer();
+                this.updateStatus('Enregistrement en pause', 'paused');
+                this.updateUI();
+            }
+
+            resumeRecording() {
+                if (!this.mediaRecorder || this.state !== 'paused') return;
+
+                this.mediaRecorder.resume();
+                this.isPaused = false;
+                this.startTime = Date.now();
+                this.state = 'recording';
+
+                this.startTimer();
+                this.drawVisualizer();
+                this.updateStatus('Enregistrement en cours', 'recording');
+                this.updateUI();
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && (this.state === 'recording' || this.state === 'paused')) {
+                    if (!this.isPaused && this.startTime) {
+                        this.elapsedBeforePause += Date.now() - this.startTime;
                     }
 
-                    // Mettre à jour l'interface
-                    this.recordBtn.classList.remove('recording');
-                    this.recordBtn.classList.add('stopped');
-                    this.recordText.textContent = 'Nouveau';
-
-                    // Arrêter le timer
                     this.stopTimer();
+                    this.stopVisualizer();
+                    this.state = 'processing';
+                    this.updateStatus('Traitement...', 'processing');
+                    this.updateUI();
 
-                    this.updateStatus('Traitement de l\'enregistrement...', 'processing');
+                    this.mediaRecorder.stop();
+                    this.cleanupStream();
                 }
             }
 
             processRecording() {
-                // Créer le blob audio
-                this.audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-
-                // Créer l'URL pour l'aperçu
+                this.audioBlob = new Blob(this.audioChunks, { type: this.mimeType });
                 const audioUrl = URL.createObjectURL(this.audioBlob);
                 this.audioPlayer.src = audioUrl;
+                this.audioPlayer.classList.add('show');
+                this.previewEmpty.style.display = 'none';
 
-                // Activer les contrôles
-                this.playBtn.disabled = false;
-                this.downloadBtn.disabled = false;
-                this.uploadBtn.disabled = false;
-
-                // Afficher l'aperçu
                 this.audioPreview.classList.add('show');
-
-                // Afficher les informations du fichier
                 this.showFileInfo();
 
-                this.updateStatus('Enregistrement terminé !', 'complete');
+                this.state = 'finished';
+                this.mediaRecorder = null;
+                this.updateStatus('Enregistrement termine', 'complete');
+                this.updateUI();
             }
 
             playAudio() {
@@ -395,78 +493,104 @@
             }
 
             downloadAudio() {
-                if (this.audioBlob) {
-                    const url = URL.createObjectURL(this.audioBlob);
-                    const a = document.createElement('a');
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    a.href = url;
-                    a.download = `enregistrement-${timestamp}.webm`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }
+                if (!this.audioBlob) return;
+                const url = URL.createObjectURL(this.audioBlob);
+                const a = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                a.href = url;
+                a.download = `enregistrement-${timestamp}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             }
 
             async uploadToJetson() {
                 if (!this.audioBlob) return;
 
                 try {
-                    this.updateStatus('Envoi vers le Jetson...', 'processing');
+                    this.updateStatus('Envoi en cours...', 'processing');
+                    this.showLoader(true);
                     this.uploadProgress.classList.add('show');
-                    this.uploadBtn.disabled = true;
+                    this.progressBar.style.width = '0%';
+                    this.btnUpload.disabled = true;
+                    this.uploadHint.textContent = 'Upload en cours...';
 
-                    // Créer le FormData
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    formData.append('audio', this.audioBlob, `recording-${timestamp}.webm`);
+                    formData.append('file', this.audioBlob, `recording-${timestamp}.webm`);
                     formData.append('timestamp', timestamp);
 
-                    // Upload avec suivi du progrès
-                    const xhr = new XMLHttpRequest();
-
-                    xhr.upload.onprogress = (event) => {
-                        if (event.lengthComputable) {
-                            const percentComplete = (event.loaded / event.total) * 100;
-                            this.progressBar.style.width = percentComplete + '%';
+                    const targetUrl = this.buildUrl('/upload');
+                    const send = (authHeader = null) => new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', targetUrl);
+                        if (authHeader) {
+                            xhr.setRequestHeader('Authorization', authHeader);
                         }
-                    };
 
-                    xhr.onload = () => {
-                        if (xhr.status === 200) {
-                            this.updateStatus('Envoi réussi ! Transcription en cours...', 'complete');
-                            // Ici vous pourriez ajouter une logique pour suivre le statut de la transcription
-                            setTimeout(() => {
-                                this.updateStatus('Transcription terminée !', 'complete');
-                                this.resetInterface();
-                            }, 3000);
-                        } else {
-                            throw new Error(`Erreur serveur: ${xhr.status}`);
-                        }
-                    };
+                        xhr.upload.onprogress = (event) => {
+                            if (event.lengthComputable) {
+                                const percent = (event.loaded / event.total) * 100;
+                                this.progressBar.style.width = percent + '%';
+                            }
+                        };
 
-                    xhr.onerror = () => {
-                        throw new Error('Erreur de connexion au Jetson');
-                    };
+                        xhr.onload = () => {
+                            if (xhr.status === 200 || xhr.status === 201) {
+                                resolve(xhr.responseText);
+                            } else if (xhr.status === 401 && !authHeader) {
+                                const user = prompt("Nom d'utilisateur (Basic Auth) :");
+                                const pass = prompt('Mot de passe :');
+                                if (user && pass) {
+                                    const auth = 'Basic ' + btoa(`${user}:${pass}`);
+                                    send(auth).then(resolve).catch(reject);
+                                } else {
+                                    reject(new Error('Authentification requise'));
+                                }
+                            } else {
+                                const body = xhr.responseText || '';
+                                reject(new Error(`Erreur serveur: ${xhr.status} ${body}`));
+                            }
+                        };
 
-                    xhr.open('POST', `${this.jetsonUrl}/upload-audio`);
-                    xhr.send(formData);
+                        xhr.onerror = () => reject(new Error('Erreur de connexion au serveur'));
+                        xhr.send(formData);
+                    });
 
+                    await send();
+                    this.progressBar.style.width = '100%';
+                    this.uploadHint.textContent = 'Envoyé avec succes';
+                    this.updateStatus('Envoi reussi', 'complete');
+                    setTimeout(() => this.resetInterface(), 1500);
                 } catch (error) {
-                    console.error('Erreur lors de l\'upload:', error);
+                    console.error('Erreur lors de lupload:', error);
                     this.updateStatus(`Erreur: ${error.message}`, 'error');
-                    this.uploadBtn.disabled = false;
-                    this.uploadProgress.classList.remove('show');
+                    this.btnUpload.disabled = false;
+                    this.uploadProgress.classList.add('show');
+                    this.uploadHint.textContent = 'Erreur lors de lenvoi. Reessayez.';
+                } finally {
+                    this.showLoader(false);
                 }
             }
 
+            getElapsedTime() {
+                const active = (!this.isPaused && this.state === 'recording' && this.startTime)
+                    ? Date.now() - this.startTime
+                    : 0;
+                return this.elapsedBeforePause + active;
+            }
+
+            updateTimerDisplay(elapsedMs = this.getElapsedTime()) {
+                const minutes = Math.floor(elapsedMs / 60000);
+                const seconds = Math.floor((elapsedMs % 60000) / 1000);
+                this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
             startTimer() {
-                this.timerInterval = setInterval(() => {
-                    const elapsed = Date.now() - this.startTime;
-                    const minutes = Math.floor(elapsed / 60000);
-                    const seconds = Math.floor((elapsed % 60000) / 1000);
-                    this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                }, 1000);
+                this.stopTimer();
+                this.updateTimerDisplay();
+                this.timerInterval = setInterval(() => this.updateTimerDisplay(), 1000);
             }
 
             stopTimer() {
@@ -476,45 +600,164 @@
                 }
             }
 
+            drawVisualizer() {
+                if (!this.analyser) return;
+                cancelAnimationFrame(this.animationId);
+
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+                const centerY = height / 2;
+
+                const animate = () => {
+                    if (this.state !== 'recording') return;
+
+                    this.analyser.getByteFrequencyData(this.dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < this.dataArray.length; i++) {
+                        sum += this.dataArray[i];
+                    }
+                    const average = sum / this.dataArray.length;
+                    const volume = (average / 255) * 100;
+                    const amplitude = Math.max(2, volume * 1.4);
+                    const time = Date.now() * 0.005;
+
+                    this.canvasCtx.clearRect(0, 0, width, height);
+                    this.canvasCtx.lineWidth = 2;
+                    this.canvasCtx.strokeStyle = 'rgba(37, 99, 235, 0.9)';
+                    this.canvasCtx.beginPath();
+                    this.canvasCtx.moveTo(0, centerY);
+
+                    for (let i = 0; i < width; i++) {
+                        const wave1 = Math.sin(i * 0.02 + time);
+                        const wave2 = Math.sin(i * 0.06 - time);
+                        const y = centerY + (wave1 + wave2) * amplitude;
+                        this.canvasCtx.lineTo(i, y);
+                    }
+
+                    this.canvasCtx.stroke();
+                    this.animationId = requestAnimationFrame(animate);
+                };
+
+                animate();
+            }
+
+            stopVisualizer() {
+                cancelAnimationFrame(this.animationId);
+                this.animationId = null;
+                this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+
+            resizeCanvas() {
+                this.canvas.width = this.vizContainer.offsetWidth;
+                this.canvas.height = 120;
+            }
+
             updateStatus(message, type) {
-                this.status.textContent = message;
-                this.status.className = `status ${type}`;
+                this.statusLabel.textContent = message;
+                const hints = {
+                    ready: '',
+                    recording: '',
+                    paused: '',
+                    processing: '',
+                    complete: '',
+                    error: ''
+                };
+                this.statusHint.textContent = hints[type] || '';
+
+                this.statusDot.className = 'dot';
+                if (type !== 'ready') {
+                    this.statusDot.classList.add(type);
+                }
             }
 
             showFileInfo() {
                 if (this.audioBlob) {
                     const sizeKB = (this.audioBlob.size / 1024).toFixed(2);
                     const duration = this.timer.textContent;
-                    this.fileDetails.innerHTML = `
-                        Taille: ${sizeKB} KB<br>
-                        Durée: ${duration}<br>
-                        Type: ${this.audioBlob.type}<br>
-                        Créé: ${new Date().toLocaleString()}
-                    `;
+                    this.fileDetails.innerHTML = `Taille : ${sizeKB} KB<br>Duree : ${duration}<br>Type : ${this.audioBlob.type}`;
                     this.fileInfo.classList.add('show');
                 }
             }
 
-            resetInterface() {
-                setTimeout(() => {
-                    this.recordBtn.classList.remove('stopped');
-                    this.recordText.textContent = 'Enregistrer';
-                    this.timer.textContent = '00:00';
-                    this.playBtn.disabled = true;
-                    this.downloadBtn.disabled = true;
-                    this.uploadBtn.disabled = false;
-                    this.audioPreview.classList.remove('show');
-                    this.fileInfo.classList.remove('show');
-                    this.uploadProgress.classList.remove('show');
-                    this.progressBar.style.width = '0%';
-                    this.updateStatus('Prêt à enregistrer', 'ready');
-                }, 2000);
+            showLoader(show) {
+                if (show) {
+                    this.loader.classList.remove('hidden');
+                } else {
+                    this.loader.classList.add('hidden');
+                }
+            }
+
+            cleanupStream() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                if (this.audioCtx) {
+                    try { this.audioCtx.close(); } catch (e) {}
+                    this.audioCtx = null;
+                }
+                this.analyser = null;
+                this.dataArray = null;
+            }
+
+            resetInterface(clearStatus = true) {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+                this.mediaRecorder = null;
+                this.stopTimer();
+                this.stopVisualizer();
+                this.cleanupStream();
+
+                this.audioChunks = [];
+                this.audioBlob = null;
+                this.isPaused = false;
+                this.startTime = null;
+                this.elapsedBeforePause = 0;
+                this.state = 'idle';
+
+                this.audioPlayer.pause();
+                this.audioPlayer.src = '';
+                this.audioPlayer.classList.remove('show');
+                this.previewEmpty.style.display = 'block';
+
+                this.progressBar.style.width = '0%';
+                this.uploadProgress.classList.remove('show');
+                this.uploadHint.textContent = 'Pret a envoyer apres un enregistrement.';
+
+                this.fileDetails.textContent = "Aucun fichier pour l'instant.";
+                this.fileInfo.classList.remove('show');
+
+                if (clearStatus) {
+                    this.updateStatus('Pret a enregistrer', 'ready');
+                }
+
+                this.updateTimerDisplay(0);
+                this.updateUI();
+            }
+
+            updateUI() {
+                this.btnStop.disabled = !(this.state === 'recording' || this.state === 'paused');
+                const hasAudio = Boolean(this.audioBlob);
+                this.btnTrash.disabled = !hasAudio;
+                this.btnPlay.disabled = !hasAudio;
+                this.btnUpload.disabled = !hasAudio;
+                this.btnDownload.disabled = !hasAudio;
+
+                if (this.state === 'recording') {
+                    this.mainIcon.textContent = 'pause';
+                } else if (this.state === 'paused') {
+                    this.mainIcon.textContent = 'play_arrow';
+                } else {
+                    this.mainIcon.textContent = 'mic';
+                }
+
+                this.btnMain.disabled = this.state === 'processing';
             }
         }
 
-        // Initialiser l'application
         document.addEventListener('DOMContentLoaded', () => {
-            new AudioRecorder();
+            new RecorderApp();
         });
     </script>
 </body>

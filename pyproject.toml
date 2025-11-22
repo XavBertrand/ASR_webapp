@@ -7,11 +7,16 @@ requires-python = ">=3.10"
 dependencies = [
   "fastapi",
   "uvicorn[standard]",
-  "python-multipart",   # pour upload de fichiers
+  "python-multipart", # pour upload de fichiers
   "websockets",
   "pydantic>=2",
   "aiohttp",
-  "requests"
+  "requests",
+  "flask",
+  "flask-cors",
+  "werkzeug",
+  "gunicorn>=23.0.0",
+  "supervisor>=4.3.0",
 ]
 
 [project.optional-dependencies]
@@ -26,4 +31,4 @@ dev = [
 
 [tool.uv]
 # Active le venv local ./.venv automatiquement
-index-strategy = "eager"
+index-strategy = "first-index"
