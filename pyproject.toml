@@ -17,6 +17,7 @@ dependencies = [
   "werkzeug",
   "gunicorn>=23.0.0",
   "supervisor>=4.3.0",
+  "pytest>=8.4.2",
 ]
 
 [project.optional-dependencies]
