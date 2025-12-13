@@ -1,4 +1,6 @@
 import io
+import json
+from datetime import datetime
 import pytest
 from server import app as app_module
 
@@ -63,7 +65,54 @@ def test_upload_and_serve_recording(test_client):
     assert saved_name.startswith("audio_")
     assert saved_name.endswith(".wav")
     assert (upload_dir / saved_name).read_bytes() == audio_bytes
+    meta_path = upload_dir / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
+    assert meta_path.exists()
+    metadata = json.loads(meta_path.read_text())
+    assert metadata["saved_filename"] == saved_name
+    assert metadata["meeting_report_type"] == app_module.DEFAULT_MEETING_REPORT_TYPE
+    assert metadata["meeting_date"] == datetime.utcnow().date().isoformat()
 
     fetch_resp = client.get(f"/recordings/{saved_name}")
     assert fetch_resp.status_code == 200
     assert fetch_resp.data == audio_bytes
+
+
+def test_upload_saves_custom_metadata(test_client):
+    client, upload_dir = test_client
+    audio_bytes = b"RIFF....WAVEfmt "
+    meeting_date = datetime.utcnow().date().isoformat()
+
+    upload_resp = client.post(
+        "/upload",
+        data={
+            "file": (io.BytesIO(audio_bytes), "audio.wav"),
+            "asr_prompt": "Mots cles test",
+            "speaker_context": "Deux interlocuteurs",
+            "meeting_date": meeting_date,
+            "meeting_report_type": "entretien_client_professionnel_conseil",
+        },
+        content_type="multipart/form-data",
+    )
+    assert upload_resp.status_code == 201
+    payload = upload_resp.get_json()
+    saved_name = payload["filename"]
+    meta_path = upload_dir / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
+    metadata = json.loads(meta_path.read_text())
+    assert metadata["asr_prompt"] == "Mots cles test"
+    assert metadata["speaker_context"] == "Deux interlocuteurs"
+    assert metadata["meeting_date"] == meeting_date
+    assert metadata["meeting_report_type"] == "entretien_client_professionnel_conseil"
+
+
+def test_upload_rejects_bad_report_type(test_client):
+    client, _ = test_client
+    resp = client.post(
+        "/upload",
+        data={
+            "file": (io.BytesIO(b"fake"), "audio.wav"),
+            "meeting_report_type": "non_supporte",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert "invalide" in resp.get_json()["error"]

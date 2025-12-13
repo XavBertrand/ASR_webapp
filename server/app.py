@@ -1,13 +1,21 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
-import os, logging
+import json, os, logging
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "recordings")
 ALLOWED_EXTENSIONS = {'webm', 'wav', 'mp3', 'ogg', 'm4a'}
 MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100")) * 1024 * 1024
+DEFAULT_ASR_PROMPT = os.environ.get("DEFAULT_ASR_PROMPT", "Kleos, Pennylane, CJD, Manupro, El Moussaoui")
+MEETING_REPORT_TYPES = [
+    "entretien_collaborateur",
+    "entretien_client_particulier_contentieux",
+    "entretien_client_professionnel_conseil",
+    "entretien_client_professionnel_contentieux",
+]
+DEFAULT_MEETING_REPORT_TYPE = MEETING_REPORT_TYPES[0]
 
 # $2a$14$Dkt5dWAF1BjZbHWOW6ZoxO7cSvZjAKpY47pMNljXPhGThlmdkIu4.
 
@@ -38,6 +46,30 @@ logger = logging.getLogger(__name__)
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def normalize_meeting_date(raw: str | None) -> str:
+    if not raw:
+        return datetime.utcnow().date().isoformat()
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
+    except ValueError:
+        raise ValueError("meeting_date doit respecter le format YYYY-MM-DD")
+
+def extract_metadata(req_form) -> dict:
+    meeting_report_type = (req_form.get("meeting_report_type") or DEFAULT_MEETING_REPORT_TYPE).strip()
+    if meeting_report_type not in MEETING_REPORT_TYPES:
+        raise ValueError("meeting_report_type invalide")
+
+    asr_prompt = (req_form.get("asr_prompt") or DEFAULT_ASR_PROMPT).strip()
+    speaker_context = (req_form.get("speaker_context") or "").strip()
+    meeting_date = normalize_meeting_date(req_form.get("meeting_date"))
+
+    return {
+        "asr_prompt": asr_prompt,
+        "speaker_context": speaker_context,
+        "meeting_date": meeting_date,
+        "meeting_report_type": meeting_report_type,
+    }
+
 @app.get("/health")
 def health():
     return {"status": "ok"}, 200
@@ -55,9 +87,25 @@ def upload():
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     safe_name = f"{stem}_{ts}{ext.lower()}"
     save_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
+    try:
+        metadata = extract_metadata(request.form)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     f.save(save_path)
+    metadata.update(
+        {
+            "saved_filename": safe_name,
+            "original_filename": f.filename,
+            "uploaded_at": datetime.utcnow().isoformat() + "Z",
+        }
+    )
+    meta_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{stem}_{ts}_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as meta_file:
+        json.dump(metadata, meta_file, ensure_ascii=True, indent=2)
+
     logger.info("Upload OK: %s (%d bytes)", save_path, os.path.getsize(save_path))
-    return jsonify({"ok": True, "filename": safe_name}), 201
+    return jsonify({"ok": True, "filename": safe_name, "metadata": metadata}), 201
 
 @app.get("/recordings/<path:fname>")
 def serve_recording(fname):
