@@ -165,6 +165,40 @@
         .loader-spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid #1f2937; border-top-color: var(--primary); animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        .form-section {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+        }
+        .form-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+        .form-header h2 { font-size: 1rem; color: var(--text-main); }
+        .form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-weight: 600; color: var(--text-sub); font-size: 0.95rem; }
+        .field small { color: var(--text-sub); font-size: 0.85rem; }
+        .field input,
+        .field select,
+        .field textarea {
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 10px;
+            padding: 10px 12px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            width: 100%;
+            transition: border 0.15s ease, box-shadow 0.15s ease;
+        }
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+        .field textarea { min-height: 82px; resize: vertical; }
+
         @media (max-width: 640px) {
             main.page { padding: 14px; }
             .timer { font-size: 2.6rem; }
@@ -198,6 +232,40 @@
 
             <div class="visualizer" id="visualizerContainer">
                 <canvas id="audioCanvas"></canvas>
+            </div>
+
+            <div class="form-section" id="pipelineForm">
+                <div class="form-header">
+                    <h2>Parametres pipeline</h2>
+                    <span class="pill">ASR</span>
+                </div>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="inputAsrPrompt">Prompt ASR</label>
+                        <textarea id="inputAsrPrompt" placeholder="Mots cles ou contexte pour guider la transcription."></textarea>
+                        <small>Courts mots cles pour orienter la reconnaissance (restent locaux).</small>
+                    </div>
+                    <div class="field">
+                        <label for="inputSpeakerContext">Contexte intervenants</label>
+                        <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
+                        <small>Description anonymisee des roles/participants.</small>
+                    </div>
+                    <div class="field">
+                        <label for="inputMeetingDate">Date de l'entretien</label>
+                        <input type="date" id="inputMeetingDate" />
+                        <small>Par defaut : date du jour (YYYY-MM-DD).</small>
+                    </div>
+                    <div class="field">
+                        <label for="inputMeetingReportType">Type de compte rendu</label>
+                        <select id="inputMeetingReportType">
+                            <option value="entretien_collaborateur">Entretien collaborateur</option>
+                            <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
+                            <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
+                            <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
+                        </select>
+                        <small>Choix unique parmi les 4 categories prises en charge.</small>
+                    </div>
+                </div>
             </div>
 
             <div class="panel-grid">
@@ -282,9 +350,18 @@
                 this.mimeType = 'audio/webm';
                 this.jetsonUrl = '';
                 this.baseUploadUrl = this.resolveBaseUrl();
+                this.reportTypes = [
+                    'entretien_collaborateur',
+                    'entretien_client_particulier_contentieux',
+                    'entretien_client_professionnel_conseil',
+                    'entretien_client_professionnel_contentieux',
+                ];
+                this.defaultAsrPrompt = 'Kleos, Pennylane, CJD, Manupro, El Moussaoui';
+                this.defaultMeetingReportType = this.reportTypes[0];
 
                 this.initElements();
                 this.bindEvents();
+                this.prefillFormValues();
                 this.resizeCanvas();
                 window.addEventListener('resize', () => this.resizeCanvas());
 
@@ -316,6 +393,10 @@
                 this.fileInfo = document.getElementById('fileInfo');
                 this.fileDetails = document.getElementById('fileDetails');
                 this.loader = document.getElementById('loader');
+                this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
+                this.inputSpeakerContext = document.getElementById('inputSpeakerContext');
+                this.inputMeetingDate = document.getElementById('inputMeetingDate');
+                this.inputMeetingReportType = document.getElementById('inputMeetingReportType');
                 this.canvasCtx = this.canvas.getContext('2d');
             }
 
@@ -341,6 +422,37 @@
                 const cleanPath = path.startsWith('/') ? path : `/${path}`;
                 if (!this.baseUploadUrl) return cleanPath;
                 return `${this.baseUploadUrl}${cleanPath}`;
+            }
+
+            getTodayIso() {
+                return new Date().toISOString().slice(0, 10);
+            }
+
+            prefillFormValues() {
+                if (this.inputAsrPrompt && !this.inputAsrPrompt.value) {
+                    this.inputAsrPrompt.value = this.defaultAsrPrompt;
+                }
+                if (this.inputMeetingDate && !this.inputMeetingDate.value) {
+                    this.inputMeetingDate.value = this.getTodayIso();
+                }
+                if (this.inputMeetingReportType && !this.inputMeetingReportType.value) {
+                    this.inputMeetingReportType.value = this.defaultMeetingReportType;
+                }
+            }
+
+            getFormMetadata() {
+                const meetingDate = (this.inputMeetingDate?.value || this.getTodayIso());
+                const reportType = (this.inputMeetingReportType?.value || this.defaultMeetingReportType);
+                if (!this.reportTypes.includes(reportType)) {
+                    throw new Error('Type de compte rendu invalide');
+                }
+
+                return {
+                    asr_prompt: (this.inputAsrPrompt?.value || '').trim() || this.defaultAsrPrompt,
+                    speaker_context: (this.inputSpeakerContext?.value || '').trim(),
+                    meeting_date: meetingDate,
+                    meeting_report_type: reportType
+                };
             }
 
             checkBrowserSupport() {
@@ -520,6 +632,11 @@
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                     formData.append('file', this.audioBlob, `recording-${timestamp}.webm`);
                     formData.append('timestamp', timestamp);
+                    const metadata = this.getFormMetadata();
+                    formData.append('asr_prompt', metadata.asr_prompt);
+                    formData.append('speaker_context', metadata.speaker_context);
+                    formData.append('meeting_date', metadata.meeting_date);
+                    formData.append('meeting_report_type', metadata.meeting_report_type);
 
                     const targetUrl = this.buildUrl('/upload');
                     const send = (authHeader = null) => new Promise((resolve, reject) => {
@@ -732,6 +849,7 @@
                     this.updateStatus('Pret a enregistrer', 'ready');
                 }
 
+                this.prefillFormValues();
                 this.updateTimerDisplay(0);
                 this.updateUI();
             }
