@@ -284,6 +284,7 @@ If you prefer to skip all WSL setup (Python, Caddy, DuckDNS cron, etc.), the pro
      -v caddy-config:/root/.config/caddy \
      asr-webapp:latest
    ```
+   If recordings appear as `root` on the host, pass your host IDs so uploads inherit your group: `-e UPLOAD_UID=$(id -u) -e UPLOAD_GID=$(id -g)` (or set them in `asr.env`). This is especially useful with the named Docker volume `asr-recordings`.
    No `--network host`? Publish ports: `-p 80:80 -p 443:443 -p 8000:8000`.
 
 ### Docker Image Behavior
@@ -310,5 +311,6 @@ If you prefer to skip all WSL setup (Python, Caddy, DuckDNS cron, etc.), the pro
 | `DUCKDNS_INTERVAL` | Seconds between DuckDNS updates | `300` |
 | `GUNICORN_HOST/PORT/WORKERS/THREADS/TIMEOUT` | Gunicorn options | `0.0.0.0` / `8000` / `4` / `4` / `300` |
 | `UPLOAD_FOLDER` | Path for uploads (per BasicAuth user) | `/app/recordings` (`/data/recordings` is an alias) |
+| `UPLOAD_UID` / `UPLOAD_GID` | UID/GID applied to uploaded files (fallback to owner of `UPLOAD_FOLDER`) | empty |
 
 With this image, the only manual steps are providing DuckDNS and BasicAuth secrets, then running the container (plus keeping router forwarding 80/443 to the Docker host). All steps 5–10 of this guide happen inside the image.

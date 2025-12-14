@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 0002
 
 log() {
     printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2
@@ -11,6 +12,30 @@ RECORDINGS_DIR="${UPLOAD_FOLDER:-${DATA_DIR}/recordings}"
 mkdir -p "${RECORDINGS_DIR}" "${DATA_DIR}"
 ln -sfn "${RECORDINGS_DIR}" "${APP_DIR}/recordings"
 ln -sfn "${RECORDINGS_DIR}" "${DATA_DIR}/recordings"
+
+TARGET_UID="${UPLOAD_UID:-${LOCAL_UID:-}}"
+TARGET_GID="${UPLOAD_GID:-${LOCAL_GID:-}}"
+if [[ -z "${TARGET_UID}" ]]; then
+    TARGET_UID="$(stat -c '%u' "${RECORDINGS_DIR}" 2>/dev/null || echo 0)"
+fi
+if [[ -z "${TARGET_GID}" ]]; then
+    TARGET_GID="$(stat -c '%g' "${RECORDINGS_DIR}" 2>/dev/null || echo 0)"
+fi
+export UPLOAD_UID="${TARGET_UID}"
+export UPLOAD_GID="${TARGET_GID}"
+
+if [[ "${TARGET_UID}" != "0" || "${TARGET_GID}" != "0" ]]; then
+    if ! chown -R "${TARGET_UID}:${TARGET_GID}" "${RECORDINGS_DIR}"; then
+        log "WARNING: impossible de chown ${RECORDINGS_DIR} vers ${TARGET_UID}:${TARGET_GID}"
+    fi
+fi
+if ! chmod -R g+rwX "${RECORDINGS_DIR}"; then
+    log "WARNING: chmod -R g+rwX a échoué sur ${RECORDINGS_DIR}"
+fi
+if ! find "${RECORDINGS_DIR}" -type d -exec chmod g+s {} +; then
+    log "WARNING: impossible d'activer le bit setgid sur ${RECORDINGS_DIR}"
+fi
+log "Uploads seront créés avec UID:GID ${UPLOAD_UID}:${UPLOAD_GID}"
 
 CADDY_DOMAIN="${CADDY_DOMAIN:-localhost}"
 CADDY_EMAIL="${CADDY_EMAIL:-}"

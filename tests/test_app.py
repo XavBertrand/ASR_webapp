@@ -62,17 +62,29 @@ def test_upload_and_serve_recording(test_client):
     payload = upload_resp.get_json()
     assert payload["ok"] is True
     saved_name = payload["filename"]
+    user_dir = upload_dir / payload["metadata"]["user_folder"]
     assert saved_name.startswith("audio_")
     assert saved_name.endswith(".wav")
-    assert (upload_dir / saved_name).read_bytes() == audio_bytes
-    meta_path = upload_dir / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
+    saved_path = user_dir / saved_name
+    assert saved_path.read_bytes() == audio_bytes
+    meta_path = user_dir / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
     assert meta_path.exists()
     metadata = json.loads(meta_path.read_text())
     assert metadata["saved_filename"] == saved_name
     assert metadata["meeting_report_type"] == app_module.DEFAULT_MEETING_REPORT_TYPE
     assert metadata["meeting_date"] == datetime.utcnow().date().isoformat()
+    dir_stat = user_dir.stat()
+    file_stat = saved_path.stat()
+    meta_stat = meta_path.stat()
+    assert dir_stat.st_uid == upload_dir.stat().st_uid
+    assert dir_stat.st_gid == upload_dir.stat().st_gid
+    assert file_stat.st_gid == dir_stat.st_gid
+    assert meta_stat.st_gid == dir_stat.st_gid
+    assert (file_stat.st_mode & 0o666) == 0o664
+    assert (meta_stat.st_mode & 0o666) == 0o664
+    assert (dir_stat.st_mode & 0o2775) == 0o2775
 
-    fetch_resp = client.get(f"/recordings/{saved_name}")
+    fetch_resp = client.get(f"/recordings/{payload['metadata']['user_folder']}/{saved_name}")
     assert fetch_resp.status_code == 200
     assert fetch_resp.data == audio_bytes
 
@@ -96,7 +108,7 @@ def test_upload_saves_custom_metadata(test_client):
     assert upload_resp.status_code == 201
     payload = upload_resp.get_json()
     saved_name = payload["filename"]
-    meta_path = upload_dir / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
+    meta_path = upload_dir / payload["metadata"]["user_folder"] / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
     metadata = json.loads(meta_path.read_text())
     assert metadata["asr_prompt"] == "Mots cles test"
     assert metadata["speaker_context"] == "Deux interlocuteurs"
