@@ -21,7 +21,7 @@
             --card: #111827;
             --stroke: #1f2937;
             --text-main: #e5e7eb;
-            --text-sub: #9ca3af;
+            --text-sub: #cbd5e1;
             --primary: #60a5fa;
             --primary-strong: #3b82f6;
             --accent: #22d3ee;
@@ -44,17 +44,21 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        header {
-            padding: 14px 18px;
-            background: rgba(15,23,42,0.85);
+        /* STICKY LAYOUT */
+        .masthead {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: rgba(11,18,32,0.94);
             backdrop-filter: blur(6px);
             border-bottom: 1px solid var(--stroke);
+        }
+
+        header {
+            padding: 14px 18px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 10;
         }
 
         .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
@@ -63,8 +67,44 @@
 
         .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
 
+        .tabbar {
+            border-top: 1px solid var(--stroke);
+            border-bottom: 1px solid var(--stroke);
+            background: rgba(11,18,32,0.9);
+        }
+        .tablist {
+            display: flex;
+            gap: 6px;
+            padding: 8px 14px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+        .tab {
+            flex: 1;
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .tab[aria-selected="true"] {
+            border-color: var(--primary);
+            box-shadow: 0 6px 16px rgba(96,165,250,0.18);
+            background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(34,211,238,0.08));
+        }
+        .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
         main.page { flex: 1; padding: 18px; }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
 
         .status-card {
             display: flex;
@@ -111,7 +151,30 @@
 
         .progress-track { width: 100%; height: 10px; background: #1f2a3a; border-radius: 8px; overflow: hidden; margin: 10px 0; }
         .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width 0.2s ease; }
+        .upload-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+        .link-btn {
+            background: transparent;
+            border: 1px dashed var(--stroke);
+            color: var(--text-main);
+            border-radius: 999px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+        .actions-card {
+            background: var(--card);
+            border: 1px dashed var(--stroke);
+            border-radius: 12px;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        }
+
+        /* FOOTER CONTROLS */
         .controls {
             position: sticky;
             bottom: 0;
@@ -121,14 +184,17 @@
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
             padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
-            display: grid;
-            gap: 8px;
-            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
             max-width: 960px;
             margin: 0 auto;
             z-index: 12;
         }
-
+        .controls-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            padding-bottom: 4px;
+        }
         .btn {
             background: #141c2b;
             border: 1px solid var(--stroke);
@@ -142,12 +208,16 @@
             cursor: pointer;
             transition: all 0.15s ease;
             min-height: 78px;
+            min-width: 140px;
             box-shadow: 0 8px 20px rgba(0,0,0,0.14);
+            flex: 0 0 auto;
         }
         .btn i { font-size: 24px; }
-        .btn span { font-size: 0.78rem; letter-spacing: 0.4px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; }
+        .btn span { font-size: 0.82rem; letter-spacing: 0.3px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; text-align: center; }
         .btn:active { transform: translateY(1px); }
+        .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .btn:disabled { color: #606b7a; border-color: #1f2937; background: #0f1624; box-shadow: none; }
+        .btn.active { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(96,165,250,0.4); }
 
         .btn-main {
             background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -158,6 +228,13 @@
         .btn-main span { color: #0b1220; font-weight: 700; }
         .btn-main i { color: #0b1220; }
         .btn-main:disabled { background: #1f2937; color: #6c7482; box-shadow: none; }
+
+        .btn-ghost {
+            background: transparent;
+            border-style: dashed;
+            box-shadow: none;
+            min-height: 64px;
+        }
 
         .loader-overlay {
             position: fixed;
@@ -183,6 +260,7 @@
         }
         .form-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
         .form-header h2 { font-size: 1rem; color: var(--text-main); }
+        .form-header small { color: var(--text-sub); font-size: 0.9rem; display: block; margin-top: 2px; }
         .form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
         .field { display: flex; flex-direction: column; gap: 6px; }
         .field label { font-weight: 600; color: var(--text-sub); font-size: 0.95rem; }
@@ -207,144 +285,189 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
         }
         .field textarea { min-height: 82px; resize: vertical; }
+        .field-error label { color: var(--error); }
+        .field-error input,
+        .field-error select,
+        .field-error textarea { border-color: var(--error); }
+
+        .meta-indicator { color: var(--text-sub); font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+        .meta-indicator .dot { width: 10px; height: 10px; background: var(--success); box-shadow: none; }
+        .warning-inline {
+            border: 1px solid var(--warn);
+            background: rgba(251,191,36,0.08);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
 
         @media (max-width: 640px) {
             main.page { padding: 14px; }
             .timer { font-size: 2.6rem; }
-            .controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .controls-row { gap: 6px; }
+            .btn { min-width: 130px; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="brand">
-            <img src="logo.png" alt="Logo">
-            <div>
-                <div>Action Avocats</div>
-                <small>Enregistreur ASR</small>
+    <div class="masthead">
+        <header>
+            <div class="brand">
+                <img src="logo.png" alt="Logo">
+                <div>
+                    <div>Action Avocats</div>
+                    <small>Enregistreur ASR</small>
+                </div>
+            </div>
+            <div class="lang">FR</div>
+        </header>
+        <div class="tabbar">
+            <div class="tablist" role="tablist" aria-label="Navigation principale">
+                <button class="tab" id="tabRecord" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
+                    <i class="material-icons">mic</i> Enregistrement
+                </button>
+                <button class="tab" id="tabMeta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
+                    <i class="material-icons">description</i> Métadonnées
+                </button>
             </div>
         </div>
-        <div class="lang">FR</div>
-    </header>
+    </div>
 
     <main class="page">
-        <div class="content">
-            <div class="status-card">
-                <div class="dot" id="statusDot"></div>
-                <div>
-                    <div class="status-label" id="statusLabel">Pret a enregistrer</div>
-                    <div class="status-hint" id="statusHint"></div>
+        <section class="tab-panel active" id="panelRecord" role="tabpanel" aria-labelledby="tabRecord">
+            <div class="content">
+                <div class="status-card">
+                    <div class="dot" id="statusDot"></div>
+                    <div>
+                        <div class="status-label" id="statusLabel">Prêt - appuyez pour démarrer</div>
+                        <div class="status-hint" id="statusHint"></div>
+                    </div>
+                </div>
+
+                <div class="timer" id="timer">00:00</div>
+
+                <div class="visualizer" id="visualizerContainer">
+                    <canvas id="audioCanvas"></canvas>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel audio-preview" id="audioPreview">
+                        <div class="panel-head">
+                            <span>Aperçu</span>
+                            <span class="pill">Audio</span>
+                        </div>
+                        <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
+                        <audio controls id="audioPlayer"></audio>
+                    </div>
+
+                    <div class="panel upload-progress" id="uploadProgress">
+                        <div class="panel-head">Envoi vers le serveur</div>
+                        <div class="progress-track">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <p class="muted" id="uploadHint">Prêt à envoyer pour transcription après un enregistrement.</p>
+                    </div>
+
+                    <div class="panel file-info" id="fileInfo">
+                        <div class="panel-head">Informations fichier</div>
+                        <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
+                    </div>
+                </div>
+
+                <div class="actions-card">
+                    <button class="btn" id="btnImport">
+                        <i class="material-icons">upload_file</i>
+                        <span>Importer</span>
+                    </button>
+                    <button class="btn" id="btnDownload" disabled>
+                        <i class="material-icons">download</i>
+                        <span>Télécharger</span>
+                    </button>
+                    <button class="btn" id="btnTrash" disabled>
+                        <i class="material-icons">delete_outline</i>
+                        <span>Vider</span>
+                    </button>
                 </div>
             </div>
+        </section>
 
-            <div class="timer" id="timer">00:00</div>
-
-            <div class="visualizer" id="visualizerContainer">
-                <canvas id="audioCanvas"></canvas>
-            </div>
-
-            <div class="form-section" id="pipelineForm">
-                <div class="form-header">
-                    <h2>Parametres pipeline</h2>
-                    <span class="pill">ASR</span>
-                </div>
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="inputAsrPrompt">Mots spécifiques</label>
-                        <textarea id="inputAsrPrompt" placeholder="Mots cles ou contexte pour guider la transcription."></textarea>
-                        <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
+        <section class="tab-panel" id="panelMeta" role="tabpanel" aria-labelledby="tabMeta" hidden>
+            <div class="content">
+                <div class="form-section">
+                    <div class="form-header">
+                        <div>
+                            <h2>Métadonnées</h2>
+                            <small>Les métadonnées seront envoyées avec l'audio.</small>
+                        </div>
+                        <div class="meta-indicator" id="metaSavedIndicator">
+                            <span class="dot"></span>
+                            <span>Sauvegarde auto</span>
+                        </div>
                     </div>
-                    <div class="field">
-                        <label for="inputSpeakerContext">Contexte intervenants</label>
-                        <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                        <small>Description des rôles/participants.</small>
+                    <div class="warning-inline hidden" id="metaWarning">
+                        <i class="material-icons" style="color:var(--warn);">warning</i>
+                        <span id="metaWarningText">Champs requis manquants.</span>
                     </div>
-                    <div class="field">
-                        <label for="inputMeetingDate">Date de l'entretien</label>
-                        <input type="date" id="inputMeetingDate" />
-                        <small>Par défaut : date du jour.</small>
+                    <div class="form-grid">
+                        <div class="field" id="fieldAsrPrompt">
+                            <label for="inputAsrPrompt">Mots spécifiques</label>
+                            <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
+                            <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
+                        </div>
+                        <div class="field" id="fieldSpeakerContext">
+                            <label for="inputSpeakerContext">Contexte intervenants</label>
+                            <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
+                            <small>Description des roles/participants.</small>
+                        </div>
+                        <div class="field" id="fieldMeetingDate">
+                            <label for="inputMeetingDate">Date de l'entretien</label>
+                            <input type="date" id="inputMeetingDate" />
+                            <small>Par défaut : date du jour.</small>
+                        </div>
+                        <div class="field" id="fieldMeetingReportType">
+                            <label for="inputMeetingReportType">Type de compte rendu</label>
+                            <select id="inputMeetingReportType">
+                                <option value="entretien_collaborateur">Entretien collaborateur</option>
+                                <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
+                                <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
+                                <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
+                            </select>
+                            <small>Choix unique parmi les 4 catégories prises en charge.</small>
+                        </div>
                     </div>
-                    <div class="field">
-                        <label for="inputMeetingReportType">Type de compte rendu</label>
-                        <select id="inputMeetingReportType">
-                            <option value="entretien_collaborateur">Entretien collaborateur</option>
-                            <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
-                            <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
-                            <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
-                        </select>
-                        <small>Choix unique parmi les 4 catégories prises en charge.</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel-grid">
-                <div class="panel audio-preview" id="audioPreview">
-                    <div class="panel-head">
-                        <span>Aperçu</span>
-                        <span class="pill">Audio</span>
-                    </div>
-                    <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
-                    <audio controls id="audioPlayer"></audio>
-                </div>
-
-                <div class="panel upload-progress" id="uploadProgress">
-                    <div class="panel-head">Envoi vers le serveur</div>
-                    <div class="progress-track">
-                        <div class="progress-bar" id="progressBar"></div>
-                    </div>
-                    <p class="muted" id="uploadHint">Prêt à envoyer après un enregistrement.</p>
-                </div>
-
-                <div class="panel file-info" id="fileInfo">
-                    <div class="panel-head">Informations fichier</div>
-                    <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
                 </div>
             </div>
-        </div>
+        </section>
     </main>
 
-    <div class="controls">
-        <button class="btn" id="btnImport">
-            <i class="material-icons">upload_file</i>
-            <span>Importer</span>
-        </button>
-
-        <button class="btn" id="btnTrash" disabled>
-            <i class="material-icons">delete_outline</i>
-            <span>Vider</span>
-        </button>
-
-        <button class="btn" id="btnStop" disabled>
-            <i class="material-icons">stop</i>
-            <span>Stop</span>
-        </button>
-
-        <button class="btn btn-main" id="btnMain">
-            <i class="material-icons" id="mainIcon">mic</i>
-            <span>Micro</span>
-        </button>
-
-        <button class="btn" id="btnPlay" disabled>
-            <i class="material-icons">play_arrow</i>
-            <span>Ecouter</span>
-        </button>
-
-        <button class="btn" id="btnDownload" disabled>
-            <i class="material-icons">download</i>
-            <span>Telecharger</span>
-        </button>
-
-        <button class="btn" id="btnUpload" disabled>
-            <i class="material-icons">cloud_upload</i>
-            <span>Envoyer</span>
-        </button>
-
+    <div class="controls" aria-label="Commandes principales">
+        <div class="controls-row">
+            <button class="btn btn-main" id="btnMain">
+                <i class="material-icons" id="mainIcon">mic</i>
+                <span>Enregistrer</span>
+            </button>
+            <button class="btn" id="btnStop" disabled>
+                <i class="material-icons">stop</i>
+                <span>Stop</span>
+            </button>
+            <button class="btn" id="btnPlay" disabled>
+                <i class="material-icons">play_arrow</i>
+                <span>Écouter</span>
+            </button>
+            <button class="btn" id="btnUpload" disabled>
+                <i class="material-icons">cloud_upload</i>
+                <span>Envoyer pour transcription</span>
+            </button>
+        </div>
         <input type="file" id="filePicker" accept="audio/*,video/mp4" style="display:none">
     </div>
 
     <div class="loader-overlay hidden" id="loader">
         <div class="loader-spinner"></div>
-        <p style="color:var(--text-main); font-weight: 600;">Traitement...</p>
+        <p style="color:var(--text-main); font-weight: 600;">Transcription et anonymisation en cours...</p>
     </div>
 
     <script>
@@ -376,19 +499,37 @@
                 this.defaultMeetingReportType = this.reportTypes[0];
                 this.audioDurationSec = null;
                 this.currentFileName = '';
+                this.metaStorageKey = 'asr_meta';
+                this.tabStorageKey = 'asr_active_tab';
+                this.activeTab = 'record';
+                this.metaSaveTimeout = null;
 
                 this.initElements();
                 this.bindEvents();
+                this.setupTabsA11y(); // TABS A11Y
+                this.restoreMetadata();
+                this.restoreTab();
                 this.prefillFormValues();
                 this.resizeCanvas();
                 window.addEventListener('resize', () => this.resizeCanvas());
 
                 if (!this.checkBrowserSupport()) return;
-                this.updateStatus('Pret a enregistrer', 'ready');
+                this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
                 this.updateUI();
             }
 
             initElements() {
+                // TAB UI
+                this.tabs = [document.getElementById('tabRecord'), document.getElementById('tabMeta')];
+                this.panels = {
+                    record: document.getElementById('panelRecord'),
+                    meta: document.getElementById('panelMeta')
+                };
+                this.metaSavedIndicator = document.getElementById('metaSavedIndicator');
+                this.metaWarning = document.getElementById('metaWarning');
+                this.metaWarningText = document.getElementById('metaWarningText');
+
+                // Controls & actions
                 this.btnImport = document.getElementById('btnImport');
                 this.btnMain = document.getElementById('btnMain');
                 this.mainIcon = document.getElementById('mainIcon');
@@ -398,6 +539,8 @@
                 this.btnUpload = document.getElementById('btnUpload');
                 this.btnDownload = document.getElementById('btnDownload');
                 this.filePicker = document.getElementById('filePicker');
+
+                // Status & audio
                 this.timer = document.getElementById('timer');
                 this.statusDot = document.getElementById('statusDot');
                 this.statusLabel = document.getElementById('statusLabel');
@@ -413,14 +556,23 @@
                 this.fileInfo = document.getElementById('fileInfo');
                 this.fileDetails = document.getElementById('fileDetails');
                 this.loader = document.getElementById('loader');
+                this.canvasCtx = this.canvas.getContext('2d');
+
+                // Metadata
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
                 this.inputSpeakerContext = document.getElementById('inputSpeakerContext');
                 this.inputMeetingDate = document.getElementById('inputMeetingDate');
                 this.inputMeetingReportType = document.getElementById('inputMeetingReportType');
-                this.canvasCtx = this.canvas.getContext('2d');
+                this.fieldMeetingDate = document.getElementById('fieldMeetingDate');
+                this.fieldMeetingReportType = document.getElementById('fieldMeetingReportType');
             }
 
             bindEvents() {
+                // Tabs click
+                this.tabs[0].addEventListener('click', () => this.setActiveTab('record'));
+                this.tabs[1].addEventListener('click', () => this.setActiveTab('meta'));
+
+                // Controls
                 this.btnImport.addEventListener('click', () => this.filePicker?.click());
                 this.btnMain.addEventListener('click', () => this.handleMainAction());
                 this.btnStop.addEventListener('click', () => this.handleStop());
@@ -435,6 +587,108 @@
                     }
                     event.target.value = '';
                 });
+
+                // Metadata persistence
+                const metaInputs = [
+                    this.inputAsrPrompt,
+                    this.inputSpeakerContext,
+                    this.inputMeetingDate,
+                    this.inputMeetingReportType
+                ];
+                metaInputs.forEach((el) => {
+                    if (!el) return;
+                    el.addEventListener('input', () => this.handleMetadataChange());
+                    el.addEventListener('change', () => this.handleMetadataChange());
+                });
+            }
+
+            // TABS A11Y
+            setupTabsA11y() {
+                this.tabs.forEach((tab, index) => {
+                    tab.addEventListener('keydown', (e) => {
+                        const lastIndex = this.tabs.length - 1;
+                        let targetIndex = index;
+                        if (e.key === 'ArrowRight') {
+                            targetIndex = (index + 1) % this.tabs.length;
+                            e.preventDefault();
+                            this.tabs[targetIndex].focus();
+                        } else if (e.key === 'ArrowLeft') {
+                            targetIndex = (index - 1 + this.tabs.length) % this.tabs.length;
+                            e.preventDefault();
+                            this.tabs[targetIndex].focus();
+                        } else if (e.key === 'Home') {
+                            e.preventDefault();
+                            this.tabs[0].focus();
+                        } else if (e.key === 'End') {
+                            e.preventDefault();
+                            this.tabs[lastIndex].focus();
+                        } else if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.setActiveTab(index === 0 ? 'record' : 'meta');
+                        }
+                    });
+                });
+            }
+
+            // localStorage helpers
+            saveToLocalStorage(key, value) {
+                try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+            }
+            loadFromLocalStorage(key, fallback = null) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    return raw ? JSON.parse(raw) : fallback;
+                } catch (e) {
+                    return fallback;
+                }
+            }
+
+            setActiveTab(tab) {
+                this.activeTab = tab;
+                const isRecord = tab === 'record';
+                this.tabs[0].setAttribute('aria-selected', isRecord);
+                this.tabs[1].setAttribute('aria-selected', !isRecord);
+                this.tabs[0].setAttribute('tabindex', isRecord ? '0' : '-1');
+                this.tabs[1].setAttribute('tabindex', isRecord ? '-1' : '0');
+                this.tabs[0].classList.toggle('active', isRecord);
+                this.tabs[1].classList.toggle('active', !isRecord);
+                this.panels.record.classList.toggle('active', isRecord);
+                this.panels.meta.classList.toggle('active', !isRecord);
+                this.panels.record.toggleAttribute('hidden', !isRecord);
+                this.panels.meta.toggleAttribute('hidden', isRecord);
+                this.saveToLocalStorage(this.tabStorageKey, tab);
+            }
+
+            restoreTab() {
+                const stored = this.loadFromLocalStorage(this.tabStorageKey, 'record');
+                this.setActiveTab(stored === 'meta' ? 'meta' : 'record');
+            }
+
+            restoreMetadata() {
+                const stored = this.loadFromLocalStorage(this.metaStorageKey, null);
+                if (stored) {
+                    if (this.inputAsrPrompt) this.inputAsrPrompt.value = stored.asr_prompt || '';
+                    if (this.inputSpeakerContext) this.inputSpeakerContext.value = stored.speaker_context || '';
+                    if (this.inputMeetingDate) this.inputMeetingDate.value = stored.meeting_date || '';
+                    if (this.inputMeetingReportType) this.inputMeetingReportType.value = stored.meeting_report_type || '';
+                }
+            }
+
+            handleMetadataChange() {
+                const metadata = this.getFormMetadata({ validate: false });
+                this.saveToLocalStorage(this.metaStorageKey, metadata);
+                this.showMetaSaved();
+                this.clearMetadataWarning();
+            }
+
+            showMetaSaved() {
+                if (!this.metaSavedIndicator) return;
+                const label = this.metaSavedIndicator.querySelector('span:last-child');
+                if (this.metaSaveTimeout) clearTimeout(this.metaSaveTimeout);
+                if (label) label.textContent = 'Sauvegarde...';
+                this.metaSaveTimeout = setTimeout(() => {
+                    if (label) label.textContent = 'Sauvegarde auto';
+                }, 700);
             }
 
             resolveBaseUrl() {
@@ -491,12 +745,14 @@
                 if (this.inputMeetingReportType && !this.inputMeetingReportType.value) {
                     this.inputMeetingReportType.value = this.defaultMeetingReportType;
                 }
+                this.handleMetadataChange();
             }
 
-            getFormMetadata() {
+            getFormMetadata(options = { validate: true }) {
                 const meetingDate = (this.inputMeetingDate?.value || this.getTodayIso());
-                const reportType = (this.inputMeetingReportType?.value || this.defaultMeetingReportType);
-                if (!this.reportTypes.includes(reportType)) {
+                const reportTypeRaw = (this.inputMeetingReportType?.value || this.defaultMeetingReportType);
+                const reportType = this.reportTypes.includes(reportTypeRaw) ? reportTypeRaw : this.defaultMeetingReportType;
+                if (options.validate && !reportType) {
                     throw new Error('Type de compte rendu invalide');
                 }
 
@@ -506,6 +762,41 @@
                     meeting_date: meetingDate,
                     meeting_report_type: reportType
                 };
+            }
+
+            // VALIDATION FOCUS
+            validateMetadataForUpload() {
+                this.clearMetadataWarning();
+                const meta = this.getFormMetadata({ validate: false });
+                const missing = [];
+                if (!meta.meeting_date) missing.push({ field: 'date', el: this.inputMeetingDate });
+                if (!meta.meeting_report_type) missing.push({ field: 'type', el: this.inputMeetingReportType });
+
+                this.fieldMeetingDate?.classList.toggle('field-error', !meta.meeting_date);
+                this.fieldMeetingReportType?.classList.toggle('field-error', !meta.meeting_report_type);
+
+                if (missing.length) {
+                    this.showMetadataWarning(`Champs requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type de compte rendu').join(', ')}`);
+                    this.setActiveTab('meta');
+                    const target = missing[0].el;
+                    if (target) {
+                        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+                    }
+                    return { ok: false };
+                }
+                return { ok: true, metadata: this.getFormMetadata({ validate: true }) };
+            }
+
+            showMetadataWarning(message) {
+                if (!this.metaWarning) return;
+                this.metaWarningText.textContent = message;
+                this.metaWarning.classList.remove('hidden');
+            }
+
+            clearMetadataWarning() {
+                if (this.metaWarning) this.metaWarning.classList.add('hidden');
+                this.fieldMeetingDate?.classList.remove('field-error');
+                this.fieldMeetingReportType?.classList.remove('field-error');
             }
 
             checkBrowserSupport() {
@@ -606,7 +897,7 @@
                 }
 
                 this.state = 'finished';
-                this.updateStatus('Fichier importé', 'complete');
+                this.updateStatus('Fichier importe - ecoutez ou envoyez', 'complete');
                 this.showFileInfo();
                 this.updateUI();
             }
@@ -661,7 +952,7 @@
                     this.stopTimer();
                     this.stopVisualizer();
                     this.state = 'processing';
-                    this.updateStatus('Traitement...', 'processing');
+                    this.updateStatus('Preparation du fichier...', 'processing');
                     this.updateUI();
 
                     this.mediaRecorder.stop();
@@ -685,7 +976,7 @@
 
                 this.state = 'finished';
                 this.mediaRecorder = null;
-                this.updateStatus('Enregistrement termine', 'complete');
+                this.updateStatus('Fichier prêt - écoutez ou envoyez', 'complete');
                 this.updateUI();
             }
 
@@ -713,14 +1004,16 @@
 
             async uploadToJetson() {
                 if (!this.audioBlob) return;
+                const validation = this.validateMetadataForUpload();
+                if (!validation.ok) return;
 
                 try {
-                    this.updateStatus('Envoi en cours...', 'processing');
+                    this.updateStatus('Transcription et anonymisation en cours...', 'processing');
                     this.showLoader(true);
                     this.uploadProgress.classList.add('show');
                     this.progressBar.style.width = '0%';
                     this.btnUpload.disabled = true;
-                    this.uploadHint.textContent = 'Upload en cours...';
+                this.uploadHint.textContent = 'Envoi en cours...';
 
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -728,7 +1021,7 @@
                     const uploadName = this.audioBlob.name || this.currentFileName || `recording-${timestamp}.${extension}`;
                     formData.append('file', this.audioBlob, uploadName);
                     formData.append('timestamp', timestamp);
-                    const metadata = this.getFormMetadata();
+                    const metadata = validation.metadata;
                     formData.append('asr_prompt', metadata.asr_prompt);
                     formData.append('speaker_context', metadata.speaker_context);
                     formData.append('meeting_date', metadata.meeting_date);
@@ -774,14 +1067,15 @@
                     await send();
                     this.progressBar.style.width = '100%';
                     this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
-                    this.updateStatus('Envoi réussi', 'complete');
+                    this.updateStatus('Envoyé pour transcription', 'complete');
                     this.btnUpload.disabled = false;
                 } catch (error) {
                     console.error('Erreur lors de lupload:', error);
-                    this.updateStatus(`Erreur: ${error.message}`, 'error');
+                    const msg = `Erreur lors de lenvoi: ${error.message}`;
+                    this.updateStatus(msg, 'error');
                     this.btnUpload.disabled = false;
                     this.uploadProgress.classList.add('show');
-                    this.uploadHint.textContent = 'Erreur lors de lenvoi. Reessayez.';
+                    this.showUploadErrorActions('Erreur lors de lenvoi. Reessayez ou telechargez le fichier.');
                 } finally {
                     this.showLoader(false);
                 }
@@ -868,12 +1162,12 @@
             updateStatus(message, type) {
                 this.statusLabel.textContent = message;
                 const hints = {
-                    ready: '',
-                    recording: '',
-                    paused: '',
-                    processing: '',
-                    complete: '',
-                    error: ''
+                    ready: 'Appuyez sur Enregistrer pour démarrer.',
+                    recording: 'Le micro est actif.',
+                    paused: 'Reprenez ou stoppez pour préparer le fichier.',
+                    processing: 'Traitement du fichier en cours.',
+                    complete: 'Vous pouvez écouter ou envoyer pour transcription.',
+                    error: 'Réessayez, téléchargez le fichier ou contactez le support.'
                 };
                 this.statusHint.textContent = hints[type] || '';
 
@@ -943,16 +1237,15 @@
 
                 this.progressBar.style.width = '0%';
                 this.uploadProgress.classList.remove('show');
-                this.uploadHint.textContent = 'Pret a envoyer apres un enregistrement.';
+                this.uploadHint.textContent = 'Prêt à envoyer pour transcription après un enregistrement.';
 
                 this.fileDetails.textContent = "Aucun fichier pour l'instant.";
                 this.fileInfo.classList.remove('show');
 
                 if (clearStatus) {
-                    this.updateStatus('Pret a enregistrer', 'ready');
+                    this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
                 }
 
-                this.prefillFormValues();
                 this.updateTimerDisplay(0);
                 this.updateUI();
                 if (this.filePicker) {
@@ -970,13 +1263,25 @@
 
                 if (this.state === 'recording') {
                     this.mainIcon.textContent = 'pause';
+                    this.btnMain.querySelector('span').textContent = 'Mettre en pause';
                 } else if (this.state === 'paused') {
                     this.mainIcon.textContent = 'play_arrow';
+                    this.btnMain.querySelector('span').textContent = 'Reprendre';
                 } else {
                     this.mainIcon.textContent = 'mic';
+                    this.btnMain.querySelector('span').textContent = 'Enregistrer';
                 }
 
                 this.btnMain.disabled = this.state === 'processing';
+            }
+
+            showUploadErrorActions(message) {
+                if (!this.uploadHint) return;
+                this.uploadHint.innerHTML = `${message}<div class=\"upload-actions\"><button class=\"link-btn\" id=\"retryUpload\">Réessayer</button><button class=\"link-btn\" id=\"downloadLocal\">Télécharger localement</button><span class=\"muted\">Contactez le support si le problème persiste.</span></div>`;
+                const retry = document.getElementById('retryUpload');
+                if (retry) retry.onclick = () => this.uploadToJetson();
+                const dl = document.getElementById('downloadLocal');
+                if (dl) dl.onclick = () => this.downloadAudio();
             }
         }
 
