@@ -104,7 +104,17 @@
         .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
         /* ONLY MAIN SCROLLS */
-        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(18px + var(--controls-h, 0px) + var(--android-nav, 0px)); }
+        /* SCROLL CONTAINER PADDING FIX */
+        /* KEEP BOTTOM PADDING FOR FIXED FOOTER */
+        main.page {
+            min-height: 0;
+            padding-top: 18px;
+            padding-left: 18px;
+            padding-right: 18px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + 16px);
+        }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -166,6 +176,7 @@
         }
         .link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+        /* ACTIONS: FORCE 3 BUTTONS IN ONE ROW ON MOBILE */
         .actions-card {
             background: var(--card);
             border: 1px dashed var(--stroke);
@@ -173,7 +184,7 @@
             padding: 12px;
             display: grid;
             gap: 8px;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             box-shadow: 0 4px 14px rgba(0,0,0,0.12);
         }
 
@@ -311,9 +322,17 @@
         }
 
         @media (max-width: 640px) {
-            main.page { padding: 14px; }
+            main.page {
+                padding-top: 14px;
+                padding-left: 14px;
+                padding-right: 14px;
+                /* padding-bottom preserved via calc(var(--controls-h)+var(--android-nav)+16px) */
+            }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 6px; }
+            .actions-card { gap: 6px; }
+            .actions-card .btn { padding: 8px 6px; min-height: 70px; }
+            .actions-card .btn span { font-size: 0.74rem; }
         }
 
         @media (max-width: 420px) {
@@ -642,7 +661,7 @@
                 document.documentElement.style.setProperty('--app-h', `${appH}px`);
             }
 
-            // MEASURE CONTROLS HEIGHT & DETECT ANDROID NAV OVERLAP
+            // MEASURE FOOTER HEIGHT & DETECT ANDROID NAV OVERLAP
             const controls = document.querySelector('.controls');
             if (controls) {
                 const rect = controls.getBoundingClientRect();
