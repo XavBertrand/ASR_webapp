@@ -6,7 +6,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "recordings")
-ALLOWED_EXTENSIONS = {'webm', 'wav', 'mp3', 'ogg', 'm4a'}
+ALLOWED_EXTENSIONS = {'webm', 'wav', 'mp3', 'ogg', 'm4a', 'mp4'}
 MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100")) * 1024 * 1024
 DEFAULT_ASR_PROMPT = os.environ.get("DEFAULT_ASR_PROMPT", "Kleos, Pennylane, CJD, Manupro, El Moussaoui")
 MEETING_REPORT_TYPES = [

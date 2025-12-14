@@ -304,6 +304,11 @@
     </main>
 
     <div class="controls">
+        <button class="btn" id="btnImport">
+            <i class="material-icons">upload_file</i>
+            <span>Importer</span>
+        </button>
+
         <button class="btn" id="btnTrash" disabled>
             <i class="material-icons">delete_outline</i>
             <span>Vider</span>
@@ -333,6 +338,8 @@
             <i class="material-icons">cloud_upload</i>
             <span>Envoyer</span>
         </button>
+
+        <input type="file" id="filePicker" accept="audio/*,video/mp4" style="display:none">
     </div>
 
     <div class="loader-overlay hidden" id="loader">
@@ -367,6 +374,8 @@
                 ];
                 this.defaultAsrPrompt = 'Kleos, Pennylane';
                 this.defaultMeetingReportType = this.reportTypes[0];
+                this.audioDurationSec = null;
+                this.currentFileName = '';
 
                 this.initElements();
                 this.bindEvents();
@@ -380,6 +389,7 @@
             }
 
             initElements() {
+                this.btnImport = document.getElementById('btnImport');
                 this.btnMain = document.getElementById('btnMain');
                 this.mainIcon = document.getElementById('mainIcon');
                 this.btnStop = document.getElementById('btnStop');
@@ -387,6 +397,7 @@
                 this.btnPlay = document.getElementById('btnPlay');
                 this.btnUpload = document.getElementById('btnUpload');
                 this.btnDownload = document.getElementById('btnDownload');
+                this.filePicker = document.getElementById('filePicker');
                 this.timer = document.getElementById('timer');
                 this.statusDot = document.getElementById('statusDot');
                 this.statusLabel = document.getElementById('statusLabel');
@@ -410,12 +421,20 @@
             }
 
             bindEvents() {
+                this.btnImport.addEventListener('click', () => this.filePicker?.click());
                 this.btnMain.addEventListener('click', () => this.handleMainAction());
                 this.btnStop.addEventListener('click', () => this.handleStop());
                 this.btnTrash.addEventListener('click', () => this.resetInterface());
                 this.btnPlay.addEventListener('click', () => this.playAudio());
                 this.btnUpload.addEventListener('click', () => this.uploadToJetson());
                 this.btnDownload.addEventListener('click', () => this.downloadAudio());
+                this.filePicker.addEventListener('change', (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                        this.loadExternalFile(file);
+                    }
+                    event.target.value = '';
+                });
             }
 
             resolveBaseUrl() {
@@ -435,6 +454,31 @@
 
             getTodayIso() {
                 return new Date().toISOString().slice(0, 10);
+            }
+
+            formatDuration(seconds) {
+                const safe = Math.max(0, Math.floor(seconds || 0));
+                const minutes = Math.floor(safe / 60);
+                const secs = safe % 60;
+                return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            inferExtension(mimeType) {
+                const map = {
+                    'audio/webm': 'webm',
+                    'audio/wav': 'wav',
+                    'audio/x-wav': 'wav',
+                    'audio/mpeg': 'mp3',
+                    'audio/mp3': 'mp3',
+                    'audio/ogg': 'ogg',
+                    'audio/mp4': 'm4a',
+                    'video/mp4': 'mp4',
+                    'audio/aac': 'aac'
+                };
+                if (map[mimeType]) return map[mimeType];
+                const parts = (mimeType || '').split('/');
+                const raw = (parts[1] || 'webm').split(';')[0];
+                return raw || 'webm';
             }
 
             prefillFormValues() {
@@ -533,6 +577,40 @@
                 }
             }
 
+            loadExternalFile(file) {
+                if (!file) return;
+                this.resetInterface(true);
+                this.audioBlob = file;
+                this.audioDurationSec = null;
+                this.currentFileName = file.name || '';
+                this.mimeType = file.type || 'audio/webm';
+
+                const objectUrl = URL.createObjectURL(file);
+                this.audioPlayer.src = objectUrl;
+                this.audioPlayer.classList.add('show');
+                this.previewEmpty.style.display = 'none';
+                this.audioPreview.classList.add('show');
+
+                const setDuration = () => {
+                    if (isFinite(this.audioPlayer.duration)) {
+                        this.audioDurationSec = this.audioPlayer.duration;
+                        this.timer.textContent = this.formatDuration(this.audioDurationSec);
+                        this.showFileInfo();
+                    }
+                };
+
+                if (this.audioPlayer.readyState >= 1) {
+                    setDuration();
+                } else {
+                    this.audioPlayer.onloadedmetadata = setDuration;
+                }
+
+                this.state = 'finished';
+                this.updateStatus('Fichier importé', 'complete');
+                this.showFileInfo();
+                this.updateUI();
+            }
+
             setupAudioGraph() {
                 if (this.audioCtx && this.audioCtx.state !== 'closed') {
                     this.audioCtx.close();
@@ -599,6 +677,10 @@
                 this.previewEmpty.style.display = 'none';
 
                 this.audioPreview.classList.add('show');
+
+                this.audioDurationSec = this.getElapsedTime() / 1000;
+                this.timer.textContent = this.formatDuration(this.audioDurationSec);
+                this.currentFileName = '';
                 this.showFileInfo();
 
                 this.state = 'finished';
@@ -618,8 +700,11 @@
                 const url = URL.createObjectURL(this.audioBlob);
                 const a = document.createElement('a');
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const extension = this.inferExtension(this.audioBlob.type || this.mimeType);
+                const preferredName = this.currentFileName || this.audioBlob.name;
+                const fallback = `enregistrement-${timestamp}.${extension}`;
                 a.href = url;
-                a.download = `enregistrement-${timestamp}.webm`;
+                a.download = preferredName || fallback;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -639,7 +724,9 @@
 
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    formData.append('file', this.audioBlob, `recording-${timestamp}.webm`);
+                    const extension = this.inferExtension(this.audioBlob.type || this.mimeType);
+                    const uploadName = this.audioBlob.name || this.currentFileName || `recording-${timestamp}.${extension}`;
+                    formData.append('file', this.audioBlob, uploadName);
                     formData.append('timestamp', timestamp);
                     const metadata = this.getFormMetadata();
                     formData.append('asr_prompt', metadata.asr_prompt);
@@ -799,8 +886,12 @@
             showFileInfo() {
                 if (this.audioBlob) {
                     const sizeKB = (this.audioBlob.size / 1024).toFixed(2);
-                    const duration = this.timer.textContent;
-                    this.fileDetails.innerHTML = `Taille : ${sizeKB} KB<br>Duree : ${duration}<br>Type : ${this.audioBlob.type}`;
+                    const duration = (this.audioDurationSec != null)
+                        ? this.formatDuration(this.audioDurationSec)
+                        : this.timer.textContent;
+                    const name = this.currentFileName || this.audioBlob.name || 'Enregistrement local';
+                    const mime = this.audioBlob.type || 'audio';
+                    this.fileDetails.innerHTML = `Fichier : ${name}<br>Taille : ${sizeKB} KB<br>Duree : ${duration}<br>Type : ${mime}`;
                     this.fileInfo.classList.add('show');
                 }
             }
@@ -841,8 +932,11 @@
                 this.startTime = null;
                 this.elapsedBeforePause = 0;
                 this.state = 'idle';
+                this.audioDurationSec = null;
+                this.currentFileName = '';
 
                 this.audioPlayer.pause();
+                this.audioPlayer.onloadedmetadata = null;
                 this.audioPlayer.src = '';
                 this.audioPlayer.classList.remove('show');
                 this.previewEmpty.style.display = 'block';
@@ -861,6 +955,9 @@
                 this.prefillFormValues();
                 this.updateTimerDisplay(0);
                 this.updateUI();
+                if (this.filePicker) {
+                    this.filePicker.value = '';
+                }
             }
 
             updateUI() {
