@@ -25,6 +25,7 @@ app.config.update(
     MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
     PREFERRED_URL_SCHEME='https',
     SESSION_COOKIE_SECURE=True,
+    JSON_AS_ASCII=False,
 )
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
@@ -74,6 +75,18 @@ def extract_metadata(req_form) -> dict:
 def health():
     return {"status": "ok"}, 200
 
+
+def current_user_folder() -> str:
+    """Derive a safe folder name from the authenticated user (Basic Auth via Caddy)."""
+    username = ""
+    if request.authorization and request.authorization.username:
+        username = request.authorization.username
+    elif request.headers.get("X-Authenticated-User"):
+        username = request.headers.get("X-Authenticated-User", "")
+    username = username.strip() or "anonymous"
+    safe = secure_filename(username).strip("._")
+    return safe or "anonymous"
+
 @app.post("/upload")
 def upload():
     if 'file' not in request.files:
@@ -86,7 +99,10 @@ def upload():
     stem, ext = os.path.splitext(secure_filename(f.filename))
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     safe_name = f"{stem}_{ts}{ext.lower()}"
-    save_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
+    user_folder = current_user_folder()
+    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], user_folder)
+    os.makedirs(user_dir, exist_ok=True)
+    save_path = os.path.join(user_dir, safe_name)
     try:
         metadata = extract_metadata(request.form)
     except ValueError as exc:
@@ -96,13 +112,14 @@ def upload():
     metadata.update(
         {
             "saved_filename": safe_name,
+            "user_folder": user_folder,
             "original_filename": f.filename,
             "uploaded_at": datetime.utcnow().isoformat() + "Z",
         }
     )
-    meta_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{stem}_{ts}_meta.json")
+    meta_path = os.path.join(user_dir, f"{stem}_{ts}_meta.json")
     with open(meta_path, "w", encoding="utf-8") as meta_file:
-        json.dump(metadata, meta_file, ensure_ascii=True, indent=2)
+        json.dump(metadata, meta_file, ensure_ascii=False, indent=2)
 
     logger.info("Upload OK: %s (%d bytes)", save_path, os.path.getsize(save_path))
     return jsonify({"ok": True, "filename": safe_name, "metadata": metadata}), 201
