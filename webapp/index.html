@@ -46,7 +46,7 @@
             height: var(--app-h, 100dvh); /* FIX 100DVH OVERRIDE */
             min-height: 100vh;
             display: grid;
-            grid-template-rows: auto 1fr auto;
+            grid-template-rows: auto 1fr; /* footer sort du flux */
         }
 
         .masthead {
@@ -103,8 +103,8 @@
         }
         .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-        /* REMOVE PADDING HACKS */
-        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(18px + var(--sys-inset-bottom)); } /* ONLY MAIN SCROLLS */
+        /* ONLY MAIN SCROLLS */
+        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(18px + var(--controls-h, 0px) + var(--android-nav, 0px)); }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -178,12 +178,18 @@
         }
 
         /* FIXED FOOTER BAR (grid row keeps it always visible) */
+        /* FIXED FOOTER */
         .controls {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transform: translateY(calc(-1 * var(--android-nav, 0px))); /* APPLY FOOTER LIFT */
             width: 100%;
             background: rgba(15,23,42,0.94);
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
-            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px) + var(--sys-inset-bottom)); /* SAFE AREA + ANDROID NAV BAR INSET */
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); /* SAFE AREA */
             z-index: 40;
         }
         .controls-inner {
@@ -510,6 +516,7 @@
                 this.tabStorageKey = 'asr_active_tab';
                 this.activeTab = 'record';
                 this.metaSaveTimeout = null;
+                this.insetRaf = null;
 
                 this.initElements();
                 this.bindEvents();
@@ -621,26 +628,30 @@
                 });
             }
 
-            // VISUAL VIEWPORT
-            scheduleViewportUpdate() {
-                if (this.insetRaf) cancelAnimationFrame(this.insetRaf);
-                this.insetRaf = requestAnimationFrame(() => this.updateViewportMetrics());
+        // VISUAL VIEWPORT
+        scheduleViewportUpdate() {
+            if (this.insetRaf) cancelAnimationFrame(this.insetRaf);
+            this.insetRaf = requestAnimationFrame(() => this.updateViewportMetrics());
+        }
+
+        updateViewportMetrics() {
+            const vv = window.visualViewport;
+            // USE VISUALVIEWPORT HEIGHT
+            const appH = vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight);
+            if (appH) {
+                document.documentElement.style.setProperty('--app-h', `${appH}px`);
             }
 
-            updateViewportMetrics() {
-                const vv = window.visualViewport;
-                // USE VISUALVIEWPORT HEIGHT
-                const appH = vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight);
-                if (appH) {
-                    document.documentElement.style.setProperty('--app-h', `${appH}px`);
-                }
-                // ANDROID INSET UPDATE
-                let inset = 0;
-                if (vv && typeof vv.height === 'number') {
-                    inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-                }
-                document.documentElement.style.setProperty('--sys-inset-bottom', `${inset}px`); // SAFE AREA FALLBACK + ANDROID NAV BAR INSET
+            // MEASURE CONTROLS HEIGHT & DETECT ANDROID NAV OVERLAP
+            const controls = document.querySelector('.controls');
+            if (controls) {
+                const rect = controls.getBoundingClientRect();
+                document.documentElement.style.setProperty('--controls-h', `${rect.height}px`);
+                const visibleBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+                const overlap = Math.max(0, rect.bottom - visibleBottom);
+                document.documentElement.style.setProperty('--android-nav', `${Math.round(overlap)}px`);
             }
+        }
 
             // TABS A11Y
             setupTabsA11y() {
