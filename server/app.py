@@ -44,6 +44,49 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _parse_env_int(env_name: str) -> int | None:
+    raw = os.environ.get(env_name)
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw, 10)
+    except ValueError:
+        logger.warning("%s doit être un entier, valeur ignorée: %r", env_name, raw)
+        return None
+
+ENV_UPLOAD_UID = _parse_env_int("UPLOAD_UID")
+ENV_UPLOAD_GID = _parse_env_int("UPLOAD_GID")
+
+
+def resolve_upload_owner(base_dir: str) -> tuple[int, int]:
+    """Return the uid/gid to apply on uploaded files."""
+    st = os.stat(base_dir)
+    uid = ENV_UPLOAD_UID if ENV_UPLOAD_UID is not None else st.st_uid
+    gid = ENV_UPLOAD_GID if ENV_UPLOAD_GID is not None else st.st_gid
+    return uid, gid
+
+
+def apply_upload_permissions(path: str, *, is_dir: bool) -> None:
+    """Best-effort chown/chmod so uploads stay writable by the host user/group."""
+    uid, gid = resolve_upload_owner(app.config["UPLOAD_FOLDER"])
+    try:
+        os.chown(path, uid, gid)
+    except PermissionError:
+        logger.debug("Pas de droits suffisants pour chown %s", path)
+    except OSError as exc:
+        logger.warning("Impossible de chown %s: %s", path, exc)
+
+    try:
+        if is_dir:
+            os.chmod(path, 0o2775)  # setgid pour hériter du groupe + g+w
+        else:
+            os.chmod(path, 0o664)
+    except OSError as exc:
+        logger.warning("Impossible de chmod %s: %s", path, exc)
+
+
+apply_upload_permissions(app.config["UPLOAD_FOLDER"], is_dir=True)
+
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -102,6 +145,7 @@ def upload():
     user_folder = current_user_folder()
     user_dir = os.path.join(app.config['UPLOAD_FOLDER'], user_folder)
     os.makedirs(user_dir, exist_ok=True)
+    apply_upload_permissions(user_dir, is_dir=True)
     save_path = os.path.join(user_dir, safe_name)
     try:
         metadata = extract_metadata(request.form)
@@ -109,6 +153,7 @@ def upload():
         return jsonify({"error": str(exc)}), 400
 
     f.save(save_path)
+    apply_upload_permissions(save_path, is_dir=False)
     metadata.update(
         {
             "saved_filename": safe_name,
@@ -121,6 +166,7 @@ def upload():
     meta_path = os.path.join(user_dir, f"{stem}_{ts}_meta.json")
     with open(meta_path, "w", encoding="utf-8") as meta_file:
         json.dump(metadata, meta_file, ensure_ascii=False, indent=2)
+    apply_upload_permissions(meta_path, is_dir=False)
 
     logger.info("Upload OK: %s (%d bytes)", save_path, os.path.getsize(save_path))
     return jsonify({"ok": True, "filename": safe_name, "metadata": metadata}), 201

@@ -183,6 +183,7 @@ The provided `Dockerfile` now reproduces the full setup described in `SETUP_SERV
      asr-webapp:latest
    ```
    When running under WSL2, remember that Windows still needs the `netsh interface portproxy` rules from `SETUP_SERVER_FULL.md` so that traffic reaching Windows on 80/443 is forwarded to WSL/Docker.
+   If you see uploads owned by `root`, add `-e UPLOAD_UID=$(id -u) -e UPLOAD_GID=$(id -g)` (or set these in `.env`) so recordings inherit your host user/group even with Docker volumes.
 
 Environment variables recognized by the image:
 
@@ -198,6 +199,7 @@ Environment variables recognized by the image:
 | `DUCKDNS_INTERVAL` | Seconds between DuckDNS refresh | `300` |
 | `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` | Gunicorn tuning | `0.0.0.0`, `8000`, `4`, `4`, `300` |
 | `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/app/recordings`) | `/app/recordings` |
+| `UPLOAD_UID` / `UPLOAD_GID` | UID/GID to apply to uploaded files (fallback to `stat` of `UPLOAD_FOLDER`) | empty |
 
 Uploads are stored per authenticated user (Basic Auth) under `UPLOAD_FOLDER/<user>/filename_timestamp.ext` with a companion `_meta.json` in the same folder. Mount `/app/recordings` on the host to retrieve them (a compatibility symlink exists at `/data/recordings` for legacy mounts).
 

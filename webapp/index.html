@@ -878,7 +878,7 @@
 
             checkBrowserSupport() {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    this.updateStatus('Votre navigateur ne supporte pas lenregistrement audio', 'error');
+                    this.updateStatus("Votre navigateur ne supporte pas l'enregistrement audio", 'error');
                     this.btnMain.disabled = true;
                     return false;
                 }
@@ -940,8 +940,8 @@
                     this.drawVisualizer();
                     this.updateUI();
                 } catch (error) {
-                    console.error('Erreur lors du demarrage de lenregistrement:', error);
-                    this.updateStatus('Erreur dacces au microphone', 'error');
+                    console.error("Erreur lors du démarrage de l'enregistrement:", error);
+                    this.updateStatus("Erreur d'accès au microphone", 'error');
                 }
             }
 
@@ -974,7 +974,7 @@
                 }
 
                 this.state = 'finished';
-                this.updateStatus('Fichier importe - ecoutez ou envoyez', 'complete');
+                this.updateStatus('Fichier importé - écoutez ou envoyez', 'complete');
                 this.showFileInfo();
                 this.updateUI();
             }
@@ -1029,7 +1029,7 @@
                     this.stopTimer();
                     this.stopVisualizer();
                     this.state = 'processing';
-                    this.updateStatus('Preparation du fichier...', 'processing');
+                    this.updateStatus('Préparation du fichier...', 'processing');
                     this.updateUI();
 
                     this.mediaRecorder.stop();
@@ -1147,12 +1147,12 @@
                     this.updateStatus('Envoyé pour transcription', 'complete');
                     this.btnUpload.disabled = false;
                 } catch (error) {
-                    console.error('Erreur lors de lupload:', error);
-                    const msg = `Erreur lors de lenvoi: ${error.message}`;
+                    console.error("Erreur lors de l'upload:", error);
+                    const msg = `Erreur lors de l'envoi: ${error.message}`;
                     this.updateStatus(msg, 'error');
                     this.btnUpload.disabled = false;
                     this.uploadProgress.classList.add('show');
-                    this.showUploadErrorActions('Erreur lors de lenvoi. Reessayez ou telechargez le fichier.');
+                    this.showUploadErrorActions("Erreur lors de l'envoi. Réessayez ou téléchargez le fichier.");
                 } finally {
                     this.showLoader(false);
                 }
