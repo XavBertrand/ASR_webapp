@@ -28,6 +28,7 @@
             --error: #ef4444;
             --warn: #fbbf24;
             --success: #22c55e;
+            --sys-inset-bottom: 0px; /* ANDROID NAV BAR INSET */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -103,7 +104,7 @@
         .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
         /* REMOVE PADDING HACKS */
-        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; } /* ONLY MAIN SCROLLS */
+        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(18px + var(--sys-inset-bottom)); } /* ONLY MAIN SCROLLS */
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -182,7 +183,7 @@
             background: rgba(15,23,42,0.94);
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
-            padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); /* SAFE AREA */
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px) + var(--sys-inset-bottom)); /* SAFE AREA + ANDROID NAV BAR INSET */
             z-index: 40;
         }
         .controls-inner {
@@ -517,7 +518,18 @@
                 this.restoreTab();
                 this.prefillFormValues();
                 this.resizeCanvas();
-                window.addEventListener('resize', () => this.resizeCanvas());
+                this.updateSystemInsets(); // ANDROID NAV BAR INSET
+
+                const handleResize = () => {
+                    this.resizeCanvas();
+                    this.scheduleInsetUpdate();
+                };
+                window.addEventListener('resize', handleResize);
+                window.addEventListener('orientationchange', handleResize);
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', () => this.scheduleInsetUpdate());
+                    window.visualViewport.addEventListener('scroll', () => this.scheduleInsetUpdate());
+                }
 
                 if (!this.checkBrowserSupport()) return;
                 this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
@@ -607,6 +619,21 @@
                     el.addEventListener('input', () => this.handleMetadataChange());
                     el.addEventListener('change', () => this.handleMetadataChange());
                 });
+            }
+
+            // VISUAL VIEWPORT
+            scheduleInsetUpdate() {
+                if (this.insetRaf) cancelAnimationFrame(this.insetRaf);
+                this.insetRaf = requestAnimationFrame(() => this.updateSystemInsets());
+            }
+
+            updateSystemInsets() {
+                let inset = 0;
+                const vv = window.visualViewport;
+                if (vv) {
+                    inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+                }
+                document.documentElement.style.setProperty('--sys-inset-bottom', `${inset}px`); // SAFE AREA FALLBACK + ANDROID NAV BAR INSET
             }
 
             // TABS A11Y
