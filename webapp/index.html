@@ -21,40 +21,46 @@
             --card: #111827;
             --stroke: #1f2937;
             --text-main: #e5e7eb;
-            --text-sub: #9ca3af;
+            --text-sub: #cbd5e1;
             --primary: #60a5fa;
             --primary-strong: #3b82f6;
             --accent: #22d3ee;
             --error: #ef4444;
             --warn: #fbbf24;
             --success: #22c55e;
+            --sys-inset-bottom: 0px; /* ANDROID NAV BAR INSET */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+        /* APP SHELL GRID */
+        html, body { height: 100%; overflow: hidden; }
         body {
             background: radial-gradient(circle at 15% 20%, rgba(96,165,250,0.08), transparent 32%),
                         radial-gradient(circle at 70% 0%, rgba(34,211,238,0.08), transparent 35%),
                         var(--bg);
             color: var(--text-main);
             font-family: 'Roboto', sans-serif;
+        }
+        .app {
+            height: var(--app-h, 100dvh); /* FIX 100DVH OVERRIDE */
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            -webkit-overflow-scrolling: touch;
+            display: grid;
+            grid-template-rows: auto 1fr; /* footer sort du flux */
+        }
+
+        .masthead {
+            background: rgba(11,18,32,0.94);
+            backdrop-filter: blur(6px);
+            border-bottom: 1px solid var(--stroke);
+            z-index: 20;
         }
 
         header {
             padding: 14px 18px;
-            background: rgba(15,23,42,0.85);
-            backdrop-filter: blur(6px);
-            border-bottom: 1px solid var(--stroke);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 10;
         }
 
         .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
@@ -63,8 +69,57 @@
 
         .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
 
-        main.page { flex: 1; padding: 18px; }
+        .tabbar {
+            border-top: 1px solid var(--stroke);
+            border-bottom: 1px solid var(--stroke);
+            background: rgba(11,18,32,0.9);
+        }
+        .tablist {
+            display: flex;
+            gap: 6px;
+            padding: 8px 14px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+        .tab {
+            flex: 1;
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .tab[aria-selected="true"] {
+            border-color: var(--primary);
+            box-shadow: 0 6px 16px rgba(96,165,250,0.18);
+            background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(34,211,238,0.08));
+        }
+        .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+        /* ONLY MAIN SCROLLS */
+        /* SCROLL CONTAINER PADDING FIX */
+        /* KEEP BOTTOM PADDING FOR FIXED FOOTER */
+        /* EXTRA BOTTOM SAFE SPACE */
+        main.page {
+            min-height: 0;
+            padding-top: 18px;
+            padding-left: 18px;
+            padding-right: 18px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
+            scroll-padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
+        }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
 
         .status-card {
             display: flex;
@@ -111,24 +166,57 @@
 
         .progress-track { width: 100%; height: 10px; background: #1f2a3a; border-radius: 8px; overflow: hidden; margin: 10px 0; }
         .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width 0.2s ease; }
+        .upload-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+        .link-btn {
+            background: transparent;
+            border: 1px dashed var(--stroke);
+            color: var(--text-main);
+            border-radius: 999px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+        /* ACTIONS: FORCE 3 BUTTONS IN ONE ROW ON MOBILE */
+        .actions-card {
+            background: var(--card);
+            border: 1px dashed var(--stroke);
+            border-radius: 12px;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        }
+        .bottom-spacer { height: calc(var(--controls-h, 0px) + 32px); } /* BOTTOM SPACER */
+
+        /* FIXED FOOTER BAR (grid row keeps it always visible) */
+        /* FIXED FOOTER */
         .controls {
-            position: sticky;
-            bottom: 0;
+            position: fixed;
             left: 0;
             right: 0;
+            bottom: 0;
+            transform: translateY(calc(-1 * var(--android-nav, 0px))); /* APPLY FOOTER LIFT */
+            width: 100%;
             background: rgba(15,23,42,0.94);
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
-            padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
-            display: grid;
-            gap: 8px;
-            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); /* SAFE AREA */
+            z-index: 40;
+        }
+        .controls-inner {
             max-width: 960px;
             margin: 0 auto;
-            z-index: 12;
+            width: 100%;
         }
-
+        /* GRID 4 BUTTONS */
+        .controls-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
         .btn {
             background: #141c2b;
             border: 1px solid var(--stroke);
@@ -145,9 +233,11 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.14);
         }
         .btn i { font-size: 24px; }
-        .btn span { font-size: 0.78rem; letter-spacing: 0.4px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; }
+        .btn span { font-size: 0.82rem; letter-spacing: 0.3px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; text-align: center; }
         .btn:active { transform: translateY(1px); }
+        .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .btn:disabled { color: #606b7a; border-color: #1f2937; background: #0f1624; box-shadow: none; }
+        .btn.active { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(96,165,250,0.4); }
 
         .btn-main {
             background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -158,6 +248,13 @@
         .btn-main span { color: #0b1220; font-weight: 700; }
         .btn-main i { color: #0b1220; }
         .btn-main:disabled { background: #1f2937; color: #6c7482; box-shadow: none; }
+
+        .btn-ghost {
+            background: transparent;
+            border-style: dashed;
+            box-shadow: none;
+            min-height: 64px;
+        }
 
         .loader-overlay {
             position: fixed;
@@ -183,6 +280,7 @@
         }
         .form-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
         .form-header h2 { font-size: 1rem; color: var(--text-main); }
+        .form-header small { color: var(--text-sub); font-size: 0.9rem; display: block; margin-top: 2px; }
         .form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
         .field { display: flex; flex-direction: column; gap: 6px; }
         .field label { font-weight: 600; color: var(--text-sub); font-size: 0.95rem; }
@@ -207,137 +305,205 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
         }
         .field textarea { min-height: 82px; resize: vertical; }
+        .field-error label { color: var(--error); }
+        .field-error input,
+        .field-error select,
+        .field-error textarea { border-color: var(--error); }
+
+        .meta-indicator { color: var(--text-sub); font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+        .meta-indicator .dot { width: 10px; height: 10px; background: var(--success); box-shadow: none; }
+        .warning-inline {
+            border: 1px solid var(--warn);
+            background: rgba(251,191,36,0.08);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
 
         @media (max-width: 640px) {
-            main.page { padding: 14px; }
+            main.page {
+                padding-top: 14px;
+                padding-left: 14px;
+                padding-right: 14px;
+                /* padding-bottom preserved via calc(...) DO NOT OVERRIDE PADDING-BOTTOM */
+            }
             .timer { font-size: 2.6rem; }
-            .controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .controls-row { gap: 6px; }
+            .actions-card { gap: 6px; }
+            .actions-card .btn { padding: 8px 6px; min-height: 70px; }
+            .actions-card .btn span { font-size: 0.74rem; }
+        }
+
+        @media (max-width: 420px) {
+            .btn { padding: 8px 6px; min-height: 70px; }
+            .btn span { font-size: 0.72rem; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="brand">
-            <img src="logo.png" alt="Logo">
-            <div>
-                <div>Action Avocats</div>
-                <small>Enregistreur ASR</small>
-            </div>
-        </div>
-        <div class="lang">FR</div>
-    </header>
-
-    <main class="page">
-        <div class="content">
-            <div class="status-card">
-                <div class="dot" id="statusDot"></div>
+<div class="app">
+    <div class="masthead">
+        <header>
+            <div class="brand">
+                <img src="logo.png" alt="Logo">
                 <div>
-                    <div class="status-label" id="statusLabel">Pret a enregistrer</div>
-                    <div class="status-hint" id="statusHint"></div>
+                    <div>Action Avocats</div>
+                    <small>Enregistreur ASR</small>
                 </div>
             </div>
-
-            <div class="timer" id="timer">00:00</div>
-
-            <div class="visualizer" id="visualizerContainer">
-                <canvas id="audioCanvas"></canvas>
-            </div>
-
-            <div class="form-section" id="pipelineForm">
-                <div class="form-header">
-                    <h2>Parametres pipeline</h2>
-                    <span class="pill">ASR</span>
-                </div>
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="inputAsrPrompt">Mots spécifiques</label>
-                        <textarea id="inputAsrPrompt" placeholder="Mots cles ou contexte pour guider la transcription."></textarea>
-                        <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
-                    </div>
-                    <div class="field">
-                        <label for="inputSpeakerContext">Contexte intervenants</label>
-                        <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                        <small>Description des rôles/participants.</small>
-                    </div>
-                    <div class="field">
-                        <label for="inputMeetingDate">Date de l'entretien</label>
-                        <input type="date" id="inputMeetingDate" />
-                        <small>Par défaut : date du jour.</small>
-                    </div>
-                    <div class="field">
-                        <label for="inputMeetingReportType">Type de compte rendu</label>
-                        <select id="inputMeetingReportType">
-                            <option value="entretien_collaborateur">Entretien collaborateur</option>
-                            <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
-                            <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
-                            <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
-                        </select>
-                        <small>Choix unique parmi les 4 catégories prises en charge.</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel-grid">
-                <div class="panel audio-preview" id="audioPreview">
-                    <div class="panel-head">
-                        <span>Aperçu</span>
-                        <span class="pill">Audio</span>
-                    </div>
-                    <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
-                    <audio controls id="audioPlayer"></audio>
-                </div>
-
-                <div class="panel upload-progress" id="uploadProgress">
-                    <div class="panel-head">Envoi vers le serveur</div>
-                    <div class="progress-track">
-                        <div class="progress-bar" id="progressBar"></div>
-                    </div>
-                    <p class="muted" id="uploadHint">Prêt à envoyer après un enregistrement.</p>
-                </div>
-
-                <div class="panel file-info" id="fileInfo">
-                    <div class="panel-head">Informations fichier</div>
-                    <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
-                </div>
+            <div class="lang">FR</div>
+        </header>
+        <div class="tabbar">
+            <div class="tablist" role="tablist" aria-label="Navigation principale">
+                <button class="tab" id="tabRecord" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
+                    <i class="material-icons">mic</i> Enregistrement
+                </button>
+                <button class="tab" id="tabMeta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
+                    <i class="material-icons">description</i> Informations
+                </button>
             </div>
         </div>
-    </main>
-
-    <div class="controls">
-        <button class="btn" id="btnTrash" disabled>
-            <i class="material-icons">delete_outline</i>
-            <span>Vider</span>
-        </button>
-
-        <button class="btn" id="btnStop" disabled>
-            <i class="material-icons">stop</i>
-            <span>Stop</span>
-        </button>
-
-        <button class="btn btn-main" id="btnMain">
-            <i class="material-icons" id="mainIcon">mic</i>
-            <span>Micro</span>
-        </button>
-
-        <button class="btn" id="btnPlay" disabled>
-            <i class="material-icons">play_arrow</i>
-            <span>Ecouter</span>
-        </button>
-
-        <button class="btn" id="btnDownload" disabled>
-            <i class="material-icons">download</i>
-            <span>Telecharger</span>
-        </button>
-
-        <button class="btn" id="btnUpload" disabled>
-            <i class="material-icons">cloud_upload</i>
-            <span>Envoyer</span>
-        </button>
     </div>
 
+    <main class="page">
+        <section class="tab-panel active" id="panelRecord" role="tabpanel" aria-labelledby="tabRecord">
+            <div class="content">
+                <div class="status-card">
+                    <div class="dot" id="statusDot"></div>
+                    <div>
+                        <div class="status-label" id="statusLabel">Prêt - appuyez pour démarrer</div>
+                        <div class="status-hint" id="statusHint"></div>
+                    </div>
+                </div>
+
+                <div class="timer" id="timer">00:00</div>
+
+                <div class="visualizer" id="visualizerContainer">
+                    <canvas id="audioCanvas"></canvas>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel audio-preview" id="audioPreview">
+                        <div class="panel-head">
+                            <span>Aperçu</span>
+                            <span class="pill">Audio</span>
+                        </div>
+                        <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
+                        <audio controls id="audioPlayer"></audio>
+                    </div>
+
+                    <div class="panel upload-progress" id="uploadProgress">
+                        <div class="panel-head">Envoi vers le serveur</div>
+                        <div class="progress-track">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <p class="muted" id="uploadHint">Prêt à envoyer pour transcription après un enregistrement.</p>
+                    </div>
+
+                    <div class="panel file-info" id="fileInfo">
+                        <div class="panel-head">Informations fichier</div>
+                        <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
+                    </div>
+                </div>
+
+                <div class="actions-card">
+                    <button class="btn" id="btnImport">
+                        <i class="material-icons">upload_file</i>
+                        <span>Importer</span>
+                    </button>
+                    <button class="btn" id="btnDownload" disabled>
+                        <i class="material-icons">download</i>
+                        <span>Télécharger</span>
+                    </button>
+                    <button class="btn" id="btnTrash" disabled>
+                        <i class="material-icons">delete_outline</i>
+                        <span>Vider</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="tab-panel" id="panelMeta" role="tabpanel" aria-labelledby="tabMeta" hidden>
+            <div class="content">
+                <div class="form-section">
+                    <div class="form-header">
+                        <div>
+                            <h2>Informations</h2>
+                            <small>Les métadonnées seront envoyées avec l'audio.</small>
+                        </div>
+                        <div class="meta-indicator" id="metaSavedIndicator">
+                            <span class="dot"></span>
+                            <span>Sauvegarde auto</span>
+                        </div>
+                    </div>
+                    <div class="warning-inline hidden" id="metaWarning">
+                        <i class="material-icons" style="color:var(--warn);">warning</i>
+                        <span id="metaWarningText">Champs requis manquants.</span>
+                    </div>
+                    <div class="form-grid">
+                        <div class="field" id="fieldAsrPrompt">
+                            <label for="inputAsrPrompt">Mots spécifiques</label>
+                            <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
+                            <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
+                        </div>
+                        <div class="field" id="fieldSpeakerContext">
+                            <label for="inputSpeakerContext">Contexte intervenants</label>
+                            <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
+                            <small>Description des roles/participants.</small>
+                        </div>
+                        <div class="field" id="fieldMeetingDate">
+                            <label for="inputMeetingDate">Date de l'entretien</label>
+                            <input type="date" id="inputMeetingDate" />
+                            <small>Par défaut : date du jour.</small>
+                        </div>
+                        <div class="field" id="fieldMeetingReportType">
+                            <label for="inputMeetingReportType">Type de compte rendu</label>
+                            <select id="inputMeetingReportType">
+                                <option value="entretien_collaborateur">Entretien collaborateur</option>
+                                <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
+                                <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
+                                <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
+                            </select>
+                            <small>Choix unique parmi les 4 catégories prises en charge.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div class="bottom-spacer" aria-hidden="true"></div>
+    </main>
+
+    <div class="controls" aria-label="Commandes principales"> <!-- FIXED FOOTER BAR -->
+        <div class="controls-inner">
+            <div class="controls-row">
+                <button class="btn btn-main" id="btnMain">
+                    <i class="material-icons" id="mainIcon">mic</i>
+                    <span>Enregistrer</span>
+                </button>
+                <button class="btn" id="btnStop" disabled>
+                    <i class="material-icons">stop</i>
+                    <span>Stop</span>
+                </button>
+                <button class="btn" id="btnPlay" disabled>
+                    <i class="material-icons">play_arrow</i>
+                    <span>Écouter</span>
+                </button>
+                <button class="btn" id="btnUpload" disabled>
+                    <i class="material-icons">cloud_upload</i>
+                    <span>Envoyer</span>
+                </button>
+            </div>
+        </div>
+        <input type="file" id="filePicker" accept="audio/*,video/mp4" style="display:none">
+    </div>
+ </div> <!-- end .app -->
     <div class="loader-overlay hidden" id="loader">
         <div class="loader-spinner"></div>
-        <p style="color:var(--text-main); font-weight: 600;">Traitement...</p>
+        <p style="color:var(--text-main); font-weight: 600;">Transcription et anonymisation en cours...</p>
     </div>
 
     <script>
@@ -367,19 +533,53 @@
                 ];
                 this.defaultAsrPrompt = 'Kleos, Pennylane';
                 this.defaultMeetingReportType = this.reportTypes[0];
+                this.audioDurationSec = null;
+                this.currentFileName = '';
+                this.metaStorageKey = 'asr_meta';
+                this.tabStorageKey = 'asr_active_tab';
+                this.activeTab = 'record';
+                this.metaSaveTimeout = null;
+                this.insetRaf = null;
 
                 this.initElements();
                 this.bindEvents();
+                this.setupTabsA11y(); // TABS A11Y
+                this.restoreMetadata();
+                this.restoreTab();
                 this.prefillFormValues();
                 this.resizeCanvas();
-                window.addEventListener('resize', () => this.resizeCanvas());
+                this.updateViewportMetrics(); // ANDROID INSET UPDATE
+
+                const handleResize = () => {
+                    this.resizeCanvas();
+                    this.scheduleViewportUpdate();
+                };
+                window.addEventListener('resize', handleResize);
+                window.addEventListener('orientationchange', handleResize);
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', () => this.scheduleViewportUpdate());
+                    window.visualViewport.addEventListener('scroll', () => this.scheduleViewportUpdate());
+                }
 
                 if (!this.checkBrowserSupport()) return;
-                this.updateStatus('Pret a enregistrer', 'ready');
+                this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
                 this.updateUI();
             }
 
             initElements() {
+                // TAB UI
+                this.tabs = [document.getElementById('tabRecord'), document.getElementById('tabMeta')];
+                this.panels = {
+                    record: document.getElementById('panelRecord'),
+                    meta: document.getElementById('panelMeta')
+                };
+                this.mainPage = document.querySelector('main.page');
+                this.metaSavedIndicator = document.getElementById('metaSavedIndicator');
+                this.metaWarning = document.getElementById('metaWarning');
+                this.metaWarningText = document.getElementById('metaWarningText');
+
+                // Controls & actions
+                this.btnImport = document.getElementById('btnImport');
                 this.btnMain = document.getElementById('btnMain');
                 this.mainIcon = document.getElementById('mainIcon');
                 this.btnStop = document.getElementById('btnStop');
@@ -387,6 +587,9 @@
                 this.btnPlay = document.getElementById('btnPlay');
                 this.btnUpload = document.getElementById('btnUpload');
                 this.btnDownload = document.getElementById('btnDownload');
+                this.filePicker = document.getElementById('filePicker');
+
+                // Status & audio
                 this.timer = document.getElementById('timer');
                 this.statusDot = document.getElementById('statusDot');
                 this.statusLabel = document.getElementById('statusLabel');
@@ -402,20 +605,167 @@
                 this.fileInfo = document.getElementById('fileInfo');
                 this.fileDetails = document.getElementById('fileDetails');
                 this.loader = document.getElementById('loader');
+                this.canvasCtx = this.canvas.getContext('2d');
+
+                // Metadata
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
                 this.inputSpeakerContext = document.getElementById('inputSpeakerContext');
                 this.inputMeetingDate = document.getElementById('inputMeetingDate');
                 this.inputMeetingReportType = document.getElementById('inputMeetingReportType');
-                this.canvasCtx = this.canvas.getContext('2d');
+                this.fieldMeetingDate = document.getElementById('fieldMeetingDate');
+                this.fieldMeetingReportType = document.getElementById('fieldMeetingReportType');
             }
 
             bindEvents() {
+                // Tabs click
+                this.tabs[0].addEventListener('click', () => this.setActiveTab('record'));
+                this.tabs[1].addEventListener('click', () => this.setActiveTab('meta'));
+
+                // Controls
+                this.btnImport.addEventListener('click', () => this.filePicker?.click());
                 this.btnMain.addEventListener('click', () => this.handleMainAction());
                 this.btnStop.addEventListener('click', () => this.handleStop());
                 this.btnTrash.addEventListener('click', () => this.resetInterface());
                 this.btnPlay.addEventListener('click', () => this.playAudio());
                 this.btnUpload.addEventListener('click', () => this.uploadToJetson());
                 this.btnDownload.addEventListener('click', () => this.downloadAudio());
+                this.filePicker.addEventListener('change', (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                        this.loadExternalFile(file);
+                    }
+                    event.target.value = '';
+                });
+
+                // Metadata persistence
+                const metaInputs = [
+                    this.inputAsrPrompt,
+                    this.inputSpeakerContext,
+                    this.inputMeetingDate,
+                    this.inputMeetingReportType
+                ];
+                metaInputs.forEach((el) => {
+                    if (!el) return;
+                    el.addEventListener('input', () => this.handleMetadataChange());
+                    el.addEventListener('change', () => this.handleMetadataChange());
+                });
+            }
+
+        // VISUAL VIEWPORT
+        scheduleViewportUpdate() {
+            if (this.insetRaf) cancelAnimationFrame(this.insetRaf);
+            this.insetRaf = requestAnimationFrame(() => this.updateViewportMetrics());
+        }
+
+        updateViewportMetrics() {
+            const vv = window.visualViewport;
+            // USE VISUALVIEWPORT HEIGHT
+            const appH = vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight);
+            if (appH) {
+                document.documentElement.style.setProperty('--app-h', `${appH}px`);
+            }
+
+            // MEASURE FOOTER HEIGHT & DETECT ANDROID NAV OVERLAP
+            const controls = document.querySelector('.controls');
+            if (controls) {
+                const rect = controls.getBoundingClientRect();
+                document.documentElement.style.setProperty('--controls-h', `${rect.height}px`);
+                const visibleBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+                const overlap = Math.max(0, rect.bottom - visibleBottom);
+                document.documentElement.style.setProperty('--android-nav', `${Math.round(overlap)}px`);
+            }
+        }
+
+            // TABS A11Y
+            setupTabsA11y() {
+                this.tabs.forEach((tab, index) => {
+                    tab.addEventListener('keydown', (e) => {
+                        const lastIndex = this.tabs.length - 1;
+                        let targetIndex = index;
+                        if (e.key === 'ArrowRight') {
+                            targetIndex = (index + 1) % this.tabs.length;
+                            e.preventDefault();
+                            this.tabs[targetIndex].focus();
+                        } else if (e.key === 'ArrowLeft') {
+                            targetIndex = (index - 1 + this.tabs.length) % this.tabs.length;
+                            e.preventDefault();
+                            this.tabs[targetIndex].focus();
+                        } else if (e.key === 'Home') {
+                            e.preventDefault();
+                            this.tabs[0].focus();
+                        } else if (e.key === 'End') {
+                            e.preventDefault();
+                            this.tabs[lastIndex].focus();
+                        } else if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.setActiveTab(index === 0 ? 'record' : 'meta');
+                        }
+                    });
+                });
+            }
+
+            // localStorage helpers
+            saveToLocalStorage(key, value) {
+                try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+            }
+            loadFromLocalStorage(key, fallback = null) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    return raw ? JSON.parse(raw) : fallback;
+                } catch (e) {
+                    return fallback;
+                }
+            }
+
+            setActiveTab(tab) {
+                this.activeTab = tab;
+                const isRecord = tab === 'record';
+                this.tabs[0].setAttribute('aria-selected', isRecord);
+                this.tabs[1].setAttribute('aria-selected', !isRecord);
+                this.tabs[0].setAttribute('tabindex', isRecord ? '0' : '-1');
+                this.tabs[1].setAttribute('tabindex', isRecord ? '-1' : '0');
+                this.tabs[0].classList.toggle('active', isRecord);
+                this.tabs[1].classList.toggle('active', !isRecord);
+                this.panels.record.classList.toggle('active', isRecord);
+                this.panels.meta.classList.toggle('active', !isRecord);
+                this.panels.record.toggleAttribute('hidden', !isRecord);
+                this.panels.meta.toggleAttribute('hidden', isRecord);
+                this.saveToLocalStorage(this.tabStorageKey, tab);
+                if (this.mainPage) {
+                    this.mainPage.scrollTo({ top: 0, behavior: 'smooth' }); // TAB SWITCH SCROLL
+                }
+            }
+
+            restoreTab() {
+                const stored = this.loadFromLocalStorage(this.tabStorageKey, 'record');
+                this.setActiveTab(stored === 'meta' ? 'meta' : 'record');
+            }
+
+            restoreMetadata() {
+                const stored = this.loadFromLocalStorage(this.metaStorageKey, null);
+                if (stored) {
+                    if (this.inputAsrPrompt) this.inputAsrPrompt.value = stored.asr_prompt || '';
+                    if (this.inputSpeakerContext) this.inputSpeakerContext.value = stored.speaker_context || '';
+                    if (this.inputMeetingDate) this.inputMeetingDate.value = stored.meeting_date || '';
+                    if (this.inputMeetingReportType) this.inputMeetingReportType.value = stored.meeting_report_type || '';
+                }
+            }
+
+            handleMetadataChange() {
+                const metadata = this.getFormMetadata({ validate: false });
+                this.saveToLocalStorage(this.metaStorageKey, metadata);
+                this.showMetaSaved();
+                this.clearMetadataWarning();
+            }
+
+            showMetaSaved() {
+                if (!this.metaSavedIndicator) return;
+                const label = this.metaSavedIndicator.querySelector('span:last-child');
+                if (this.metaSaveTimeout) clearTimeout(this.metaSaveTimeout);
+                if (label) label.textContent = 'Sauvegarde...';
+                this.metaSaveTimeout = setTimeout(() => {
+                    if (label) label.textContent = 'Sauvegarde auto';
+                }, 700);
             }
 
             resolveBaseUrl() {
@@ -437,6 +787,31 @@
                 return new Date().toISOString().slice(0, 10);
             }
 
+            formatDuration(seconds) {
+                const safe = Math.max(0, Math.floor(seconds || 0));
+                const minutes = Math.floor(safe / 60);
+                const secs = safe % 60;
+                return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            inferExtension(mimeType) {
+                const map = {
+                    'audio/webm': 'webm',
+                    'audio/wav': 'wav',
+                    'audio/x-wav': 'wav',
+                    'audio/mpeg': 'mp3',
+                    'audio/mp3': 'mp3',
+                    'audio/ogg': 'ogg',
+                    'audio/mp4': 'm4a',
+                    'video/mp4': 'mp4',
+                    'audio/aac': 'aac'
+                };
+                if (map[mimeType]) return map[mimeType];
+                const parts = (mimeType || '').split('/');
+                const raw = (parts[1] || 'webm').split(';')[0];
+                return raw || 'webm';
+            }
+
             prefillFormValues() {
                 if (this.inputAsrPrompt && !this.inputAsrPrompt.value) {
                     this.inputAsrPrompt.value = this.defaultAsrPrompt;
@@ -447,12 +822,14 @@
                 if (this.inputMeetingReportType && !this.inputMeetingReportType.value) {
                     this.inputMeetingReportType.value = this.defaultMeetingReportType;
                 }
+                this.handleMetadataChange();
             }
 
-            getFormMetadata() {
+            getFormMetadata(options = { validate: true }) {
                 const meetingDate = (this.inputMeetingDate?.value || this.getTodayIso());
-                const reportType = (this.inputMeetingReportType?.value || this.defaultMeetingReportType);
-                if (!this.reportTypes.includes(reportType)) {
+                const reportTypeRaw = (this.inputMeetingReportType?.value || this.defaultMeetingReportType);
+                const reportType = this.reportTypes.includes(reportTypeRaw) ? reportTypeRaw : this.defaultMeetingReportType;
+                if (options.validate && !reportType) {
                     throw new Error('Type de compte rendu invalide');
                 }
 
@@ -462,6 +839,41 @@
                     meeting_date: meetingDate,
                     meeting_report_type: reportType
                 };
+            }
+
+            // VALIDATION FOCUS
+            validateMetadataForUpload() {
+                this.clearMetadataWarning();
+                const meta = this.getFormMetadata({ validate: false });
+                const missing = [];
+                if (!meta.meeting_date) missing.push({ field: 'date', el: this.inputMeetingDate });
+                if (!meta.meeting_report_type) missing.push({ field: 'type', el: this.inputMeetingReportType });
+
+                this.fieldMeetingDate?.classList.toggle('field-error', !meta.meeting_date);
+                this.fieldMeetingReportType?.classList.toggle('field-error', !meta.meeting_report_type);
+
+                if (missing.length) {
+                    this.showMetadataWarning(`Champs requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type de compte rendu').join(', ')}`);
+                    this.setActiveTab('meta');
+                    const target = missing[0].el;
+                    if (target) {
+                        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+                    }
+                    return { ok: false };
+                }
+                return { ok: true, metadata: this.getFormMetadata({ validate: true }) };
+            }
+
+            showMetadataWarning(message) {
+                if (!this.metaWarning) return;
+                this.metaWarningText.textContent = message;
+                this.metaWarning.classList.remove('hidden');
+            }
+
+            clearMetadataWarning() {
+                if (this.metaWarning) this.metaWarning.classList.add('hidden');
+                this.fieldMeetingDate?.classList.remove('field-error');
+                this.fieldMeetingReportType?.classList.remove('field-error');
             }
 
             checkBrowserSupport() {
@@ -533,6 +945,40 @@
                 }
             }
 
+            loadExternalFile(file) {
+                if (!file) return;
+                this.resetInterface(true);
+                this.audioBlob = file;
+                this.audioDurationSec = null;
+                this.currentFileName = file.name || '';
+                this.mimeType = file.type || 'audio/webm';
+
+                const objectUrl = URL.createObjectURL(file);
+                this.audioPlayer.src = objectUrl;
+                this.audioPlayer.classList.add('show');
+                this.previewEmpty.style.display = 'none';
+                this.audioPreview.classList.add('show');
+
+                const setDuration = () => {
+                    if (isFinite(this.audioPlayer.duration)) {
+                        this.audioDurationSec = this.audioPlayer.duration;
+                        this.timer.textContent = this.formatDuration(this.audioDurationSec);
+                        this.showFileInfo();
+                    }
+                };
+
+                if (this.audioPlayer.readyState >= 1) {
+                    setDuration();
+                } else {
+                    this.audioPlayer.onloadedmetadata = setDuration;
+                }
+
+                this.state = 'finished';
+                this.updateStatus('Fichier importe - ecoutez ou envoyez', 'complete');
+                this.showFileInfo();
+                this.updateUI();
+            }
+
             setupAudioGraph() {
                 if (this.audioCtx && this.audioCtx.state !== 'closed') {
                     this.audioCtx.close();
@@ -583,7 +1029,7 @@
                     this.stopTimer();
                     this.stopVisualizer();
                     this.state = 'processing';
-                    this.updateStatus('Traitement...', 'processing');
+                    this.updateStatus('Preparation du fichier...', 'processing');
                     this.updateUI();
 
                     this.mediaRecorder.stop();
@@ -599,11 +1045,15 @@
                 this.previewEmpty.style.display = 'none';
 
                 this.audioPreview.classList.add('show');
+
+                this.audioDurationSec = this.getElapsedTime() / 1000;
+                this.timer.textContent = this.formatDuration(this.audioDurationSec);
+                this.currentFileName = '';
                 this.showFileInfo();
 
                 this.state = 'finished';
                 this.mediaRecorder = null;
-                this.updateStatus('Enregistrement termine', 'complete');
+                this.updateStatus('Fichier prêt - écoutez ou envoyez', 'complete');
                 this.updateUI();
             }
 
@@ -618,8 +1068,11 @@
                 const url = URL.createObjectURL(this.audioBlob);
                 const a = document.createElement('a');
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const extension = this.inferExtension(this.audioBlob.type || this.mimeType);
+                const preferredName = this.currentFileName || this.audioBlob.name;
+                const fallback = `enregistrement-${timestamp}.${extension}`;
                 a.href = url;
-                a.download = `enregistrement-${timestamp}.webm`;
+                a.download = preferredName || fallback;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -628,20 +1081,24 @@
 
             async uploadToJetson() {
                 if (!this.audioBlob) return;
+                const validation = this.validateMetadataForUpload();
+                if (!validation.ok) return;
 
                 try {
-                    this.updateStatus('Envoi en cours...', 'processing');
+                    this.updateStatus('Transcription et anonymisation en cours...', 'processing');
                     this.showLoader(true);
                     this.uploadProgress.classList.add('show');
                     this.progressBar.style.width = '0%';
                     this.btnUpload.disabled = true;
-                    this.uploadHint.textContent = 'Upload en cours...';
+                this.uploadHint.textContent = 'Envoi en cours...';
 
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    formData.append('file', this.audioBlob, `recording-${timestamp}.webm`);
+                    const extension = this.inferExtension(this.audioBlob.type || this.mimeType);
+                    const uploadName = this.audioBlob.name || this.currentFileName || `recording-${timestamp}.${extension}`;
+                    formData.append('file', this.audioBlob, uploadName);
                     formData.append('timestamp', timestamp);
-                    const metadata = this.getFormMetadata();
+                    const metadata = validation.metadata;
                     formData.append('asr_prompt', metadata.asr_prompt);
                     formData.append('speaker_context', metadata.speaker_context);
                     formData.append('meeting_date', metadata.meeting_date);
@@ -687,14 +1144,15 @@
                     await send();
                     this.progressBar.style.width = '100%';
                     this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
-                    this.updateStatus('Envoi réussi', 'complete');
+                    this.updateStatus('Envoyé pour transcription', 'complete');
                     this.btnUpload.disabled = false;
                 } catch (error) {
                     console.error('Erreur lors de lupload:', error);
-                    this.updateStatus(`Erreur: ${error.message}`, 'error');
+                    const msg = `Erreur lors de lenvoi: ${error.message}`;
+                    this.updateStatus(msg, 'error');
                     this.btnUpload.disabled = false;
                     this.uploadProgress.classList.add('show');
-                    this.uploadHint.textContent = 'Erreur lors de lenvoi. Reessayez.';
+                    this.showUploadErrorActions('Erreur lors de lenvoi. Reessayez ou telechargez le fichier.');
                 } finally {
                     this.showLoader(false);
                 }
@@ -781,12 +1239,12 @@
             updateStatus(message, type) {
                 this.statusLabel.textContent = message;
                 const hints = {
-                    ready: '',
-                    recording: '',
-                    paused: '',
-                    processing: '',
-                    complete: '',
-                    error: ''
+                    ready: 'Appuyez sur Enregistrer pour démarrer.',
+                    recording: 'Le micro est actif.',
+                    paused: 'Reprenez ou stoppez pour préparer le fichier.',
+                    processing: 'Traitement du fichier en cours.',
+                    complete: 'Vous pouvez écouter ou envoyer pour transcription.',
+                    error: 'Réessayez, téléchargez le fichier ou contactez le support.'
                 };
                 this.statusHint.textContent = hints[type] || '';
 
@@ -799,8 +1257,12 @@
             showFileInfo() {
                 if (this.audioBlob) {
                     const sizeKB = (this.audioBlob.size / 1024).toFixed(2);
-                    const duration = this.timer.textContent;
-                    this.fileDetails.innerHTML = `Taille : ${sizeKB} KB<br>Duree : ${duration}<br>Type : ${this.audioBlob.type}`;
+                    const duration = (this.audioDurationSec != null)
+                        ? this.formatDuration(this.audioDurationSec)
+                        : this.timer.textContent;
+                    const name = this.currentFileName || this.audioBlob.name || 'Enregistrement local';
+                    const mime = this.audioBlob.type || 'audio';
+                    this.fileDetails.innerHTML = `Fichier : ${name}<br>Taille : ${sizeKB} KB<br>Durée : ${duration}<br>Type : ${mime}`;
                     this.fileInfo.classList.add('show');
                 }
             }
@@ -841,26 +1303,31 @@
                 this.startTime = null;
                 this.elapsedBeforePause = 0;
                 this.state = 'idle';
+                this.audioDurationSec = null;
+                this.currentFileName = '';
 
                 this.audioPlayer.pause();
+                this.audioPlayer.onloadedmetadata = null;
                 this.audioPlayer.src = '';
                 this.audioPlayer.classList.remove('show');
                 this.previewEmpty.style.display = 'block';
 
                 this.progressBar.style.width = '0%';
                 this.uploadProgress.classList.remove('show');
-                this.uploadHint.textContent = 'Pret a envoyer apres un enregistrement.';
+                this.uploadHint.textContent = 'Prêt à envoyer pour transcription après un enregistrement.';
 
                 this.fileDetails.textContent = "Aucun fichier pour l'instant.";
                 this.fileInfo.classList.remove('show');
 
                 if (clearStatus) {
-                    this.updateStatus('Pret a enregistrer', 'ready');
+                    this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
                 }
 
-                this.prefillFormValues();
                 this.updateTimerDisplay(0);
                 this.updateUI();
+                if (this.filePicker) {
+                    this.filePicker.value = '';
+                }
             }
 
             updateUI() {
@@ -873,13 +1340,25 @@
 
                 if (this.state === 'recording') {
                     this.mainIcon.textContent = 'pause';
+                    this.btnMain.querySelector('span').textContent = 'Mettre en pause';
                 } else if (this.state === 'paused') {
                     this.mainIcon.textContent = 'play_arrow';
+                    this.btnMain.querySelector('span').textContent = 'Reprendre';
                 } else {
                     this.mainIcon.textContent = 'mic';
+                    this.btnMain.querySelector('span').textContent = 'Enregistrer';
                 }
 
                 this.btnMain.disabled = this.state === 'processing';
+            }
+
+            showUploadErrorActions(message) {
+                if (!this.uploadHint) return;
+                this.uploadHint.innerHTML = `${message}<div class=\"upload-actions\"><button class=\"link-btn\" id=\"retryUpload\">Réessayer</button><button class=\"link-btn\" id=\"downloadLocal\">Télécharger localement</button><span class=\"muted\">Contactez le support si le problème persiste.</span></div>`;
+                const retry = document.getElementById('retryUpload');
+                if (retry) retry.onclick = () => this.uploadToJetson();
+                const dl = document.getElementById('downloadLocal');
+                if (dl) dl.onclick = () => this.downloadAudio();
             }
         }
 
