@@ -106,6 +106,7 @@
         /* ONLY MAIN SCROLLS */
         /* SCROLL CONTAINER PADDING FIX */
         /* KEEP BOTTOM PADDING FOR FIXED FOOTER */
+        /* EXTRA BOTTOM SAFE SPACE */
         main.page {
             min-height: 0;
             padding-top: 18px;
@@ -113,7 +114,8 @@
             padding-right: 18px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + 16px);
+            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
+            scroll-padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
         }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
@@ -187,6 +189,7 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
             box-shadow: 0 4px 14px rgba(0,0,0,0.12);
         }
+        .bottom-spacer { height: calc(var(--controls-h, 0px) + 32px); } /* BOTTOM SPACER */
 
         /* FIXED FOOTER BAR (grid row keeps it always visible) */
         /* FIXED FOOTER */
@@ -326,7 +329,7 @@
                 padding-top: 14px;
                 padding-left: 14px;
                 padding-right: 14px;
-                /* padding-bottom preserved via calc(var(--controls-h)+var(--android-nav)+16px) */
+                /* padding-bottom preserved via calc(...) DO NOT OVERRIDE PADDING-BOTTOM */
             }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 6px; }
@@ -471,6 +474,7 @@
                 </div>
             </div>
         </section>
+        <div class="bottom-spacer" aria-hidden="true"></div>
     </main>
 
     <div class="controls" aria-label="Commandes principales"> <!-- FIXED FOOTER BAR -->
