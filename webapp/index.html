@@ -32,26 +32,27 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+        /* APP SHELL GRID */
+        html, body { height: 100%; overflow: hidden; }
         body {
             background: radial-gradient(circle at 15% 20%, rgba(96,165,250,0.08), transparent 32%),
                         radial-gradient(circle at 70% 0%, rgba(34,211,238,0.08), transparent 35%),
                         var(--bg);
             color: var(--text-main);
             font-family: 'Roboto', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            -webkit-overflow-scrolling: touch;
+        }
+        .app {
+            height: 100dvh;
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
         }
 
-        /* STICKY LAYOUT */
         .masthead {
-            position: sticky;
-            top: 0;
-            z-index: 20;
             background: rgba(11,18,32,0.94);
             backdrop-filter: blur(6px);
             border-bottom: 1px solid var(--stroke);
+            z-index: 20;
         }
 
         header {
@@ -101,7 +102,8 @@
         }
         .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-        main.page { flex: 1; padding: 18px; }
+        /* REMOVE PADDING HACKS */
+        main.page { padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; } /* ONLY MAIN SCROLLS */
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -174,26 +176,25 @@
             box-shadow: 0 4px 14px rgba(0,0,0,0.12);
         }
 
-        /* FOOTER CONTROLS */
+        /* FIXED FOOTER BAR (grid row keeps it always visible) */
         .controls {
-            position: sticky;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            width: 100%;
             background: rgba(15,23,42,0.94);
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
-            padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); /* SAFE AREA */
+            z-index: 40;
+        }
+        .controls-inner {
             max-width: 960px;
             margin: 0 auto;
-            z-index: 12;
+            width: 100%;
         }
+        /* GRID 4 BUTTONS */
         .controls-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
-            overflow-x: auto;
-            scrollbar-width: thin;
-            padding-bottom: 4px;
         }
         .btn {
             background: #141c2b;
@@ -208,9 +209,7 @@
             cursor: pointer;
             transition: all 0.15s ease;
             min-height: 78px;
-            min-width: 140px;
             box-shadow: 0 8px 20px rgba(0,0,0,0.14);
-            flex: 0 0 auto;
         }
         .btn i { font-size: 24px; }
         .btn span { font-size: 0.82rem; letter-spacing: 0.3px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; text-align: center; }
@@ -308,11 +307,16 @@
             main.page { padding: 14px; }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 6px; }
-            .btn { min-width: 130px; }
+        }
+
+        @media (max-width: 420px) {
+            .btn { padding: 8px 6px; min-height: 70px; }
+            .btn span { font-size: 0.72rem; }
         }
     </style>
 </head>
 <body>
+<div class="app">
     <div class="masthead">
         <header>
             <div class="brand">
@@ -330,7 +334,7 @@
                     <i class="material-icons">mic</i> Enregistrement
                 </button>
                 <button class="tab" id="tabMeta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
-                    <i class="material-icons">description</i> Métadonnées
+                    <i class="material-icons">description</i> Informations
                 </button>
             </div>
         </div>
@@ -399,7 +403,7 @@
                 <div class="form-section">
                     <div class="form-header">
                         <div>
-                            <h2>Métadonnées</h2>
+                            <h2>Informations</h2>
                             <small>Les métadonnées seront envoyées avec l'audio.</small>
                         </div>
                         <div class="meta-indicator" id="metaSavedIndicator">
@@ -443,28 +447,30 @@
         </section>
     </main>
 
-    <div class="controls" aria-label="Commandes principales">
-        <div class="controls-row">
-            <button class="btn btn-main" id="btnMain">
-                <i class="material-icons" id="mainIcon">mic</i>
-                <span>Enregistrer</span>
-            </button>
-            <button class="btn" id="btnStop" disabled>
-                <i class="material-icons">stop</i>
-                <span>Stop</span>
-            </button>
-            <button class="btn" id="btnPlay" disabled>
-                <i class="material-icons">play_arrow</i>
-                <span>Écouter</span>
-            </button>
-            <button class="btn" id="btnUpload" disabled>
-                <i class="material-icons">cloud_upload</i>
-                <span>Envoyer pour transcription</span>
-            </button>
+    <div class="controls" aria-label="Commandes principales"> <!-- FIXED FOOTER BAR -->
+        <div class="controls-inner">
+            <div class="controls-row">
+                <button class="btn btn-main" id="btnMain">
+                    <i class="material-icons" id="mainIcon">mic</i>
+                    <span>Enregistrer</span>
+                </button>
+                <button class="btn" id="btnStop" disabled>
+                    <i class="material-icons">stop</i>
+                    <span>Stop</span>
+                </button>
+                <button class="btn" id="btnPlay" disabled>
+                    <i class="material-icons">play_arrow</i>
+                    <span>Écouter</span>
+                </button>
+                <button class="btn" id="btnUpload" disabled>
+                    <i class="material-icons">cloud_upload</i>
+                    <span>Envoyer</span>
+                </button>
+            </div>
         </div>
         <input type="file" id="filePicker" accept="audio/*,video/mp4" style="display:none">
     </div>
-
+ </div> <!-- end .app -->
     <div class="loader-overlay hidden" id="loader">
         <div class="loader-spinner"></div>
         <p style="color:var(--text-main); font-weight: 600;">Transcription et anonymisation en cours...</p>
@@ -525,6 +531,7 @@
                     record: document.getElementById('panelRecord'),
                     meta: document.getElementById('panelMeta')
                 };
+                this.mainPage = document.querySelector('main.page');
                 this.metaSavedIndicator = document.getElementById('metaSavedIndicator');
                 this.metaWarning = document.getElementById('metaWarning');
                 this.metaWarningText = document.getElementById('metaWarningText');
@@ -657,6 +664,9 @@
                 this.panels.record.toggleAttribute('hidden', !isRecord);
                 this.panels.meta.toggleAttribute('hidden', isRecord);
                 this.saveToLocalStorage(this.tabStorageKey, tab);
+                if (this.mainPage) {
+                    this.mainPage.scrollTo({ top: 0, behavior: 'smooth' }); // TAB SWITCH SCROLL
+                }
             }
 
             restoreTab() {
@@ -1185,7 +1195,7 @@
                         : this.timer.textContent;
                     const name = this.currentFileName || this.audioBlob.name || 'Enregistrement local';
                     const mime = this.audioBlob.type || 'audio';
-                    this.fileDetails.innerHTML = `Fichier : ${name}<br>Taille : ${sizeKB} KB<br>Duree : ${duration}<br>Type : ${mime}`;
+                    this.fileDetails.innerHTML = `Fichier : ${name}<br>Taille : ${sizeKB} KB<br>Durée : ${duration}<br>Type : ${mime}`;
                     this.fileInfo.classList.add('show');
                 }
             }
