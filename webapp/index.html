@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Enregistreur ASR</title>
+    <meta name="theme-color" content="#0b1220">
+    <meta name="application-name" content="ASR">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ASR">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="icon" type="image/png" sizes="192x192" href="logo-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="logo-180.png">
+    <link rel="manifest" href="manifest.webmanifest">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
@@ -241,19 +250,19 @@
                 </div>
                 <div class="form-grid">
                     <div class="field">
-                        <label for="inputAsrPrompt">Prompt ASR</label>
+                        <label for="inputAsrPrompt">Mots spécifiques</label>
                         <textarea id="inputAsrPrompt" placeholder="Mots cles ou contexte pour guider la transcription."></textarea>
-                        <small>Courts mots cles pour orienter la reconnaissance (restent locaux).</small>
+                        <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
                     </div>
                     <div class="field">
                         <label for="inputSpeakerContext">Contexte intervenants</label>
                         <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                        <small>Description anonymisee des roles/participants.</small>
+                        <small>Description des rôles/participants.</small>
                     </div>
                     <div class="field">
                         <label for="inputMeetingDate">Date de l'entretien</label>
                         <input type="date" id="inputMeetingDate" />
-                        <small>Par defaut : date du jour (YYYY-MM-DD).</small>
+                        <small>Par défaut : date du jour.</small>
                     </div>
                     <div class="field">
                         <label for="inputMeetingReportType">Type de compte rendu</label>
@@ -263,7 +272,7 @@
                             <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
                             <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
                         </select>
-                        <small>Choix unique parmi les 4 categories prises en charge.</small>
+                        <small>Choix unique parmi les 4 catégories prises en charge.</small>
                     </div>
                 </div>
             </div>
@@ -271,7 +280,7 @@
             <div class="panel-grid">
                 <div class="panel audio-preview" id="audioPreview">
                     <div class="panel-head">
-                        <span>Apercu</span>
+                        <span>Aperçu</span>
                         <span class="pill">Audio</span>
                     </div>
                     <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
@@ -283,7 +292,7 @@
                     <div class="progress-track">
                         <div class="progress-bar" id="progressBar"></div>
                     </div>
-                    <p class="muted" id="uploadHint">Pret a envoyer apres un enregistrement.</p>
+                    <p class="muted" id="uploadHint">Prêt à envoyer après un enregistrement.</p>
                 </div>
 
                 <div class="panel file-info" id="fileInfo">
@@ -677,9 +686,9 @@
 
                     await send();
                     this.progressBar.style.width = '100%';
-                    this.uploadHint.textContent = 'Envoyé avec succes';
-                    this.updateStatus('Envoi reussi', 'complete');
-                    setTimeout(() => this.resetInterface(), 1500);
+                    this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
+                    this.updateStatus('Envoi réussi', 'complete');
+                    this.btnUpload.disabled = false;
                 } catch (error) {
                     console.error('Erreur lors de lupload:', error);
                     this.updateStatus(`Erreur: ${error.message}`, 'error');
@@ -877,6 +886,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             new RecorderApp();
         });
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch((err) => {
+                    console.error('Service worker registration failed:', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>

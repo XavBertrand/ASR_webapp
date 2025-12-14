@@ -199,7 +199,7 @@ Environment variables recognized by the image:
 | `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` | Gunicorn tuning | `0.0.0.0`, `8000`, `4`, `4`, `300` |
 | `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/app/recordings`) | `/app/recordings` |
 
-The container also maintains a compatibility symlink `/data/recordings` -> `/app/recordings`, so old volume names continue to work, but new deployments should mount `/app/recordings` on the host to retrieve uploads easily.
+Uploads are stored per authenticated user (Basic Auth) under `UPLOAD_FOLDER/<user>/filename_timestamp.ext` with a companion `_meta.json` in the same folder. Mount `/app/recordings` on the host to retrieve them (a compatibility symlink exists at `/data/recordings` for legacy mounts).
 
 With these settings the image automatically:
 

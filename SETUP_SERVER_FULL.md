@@ -129,14 +129,14 @@ ai-actionavocats.duckdns.org {
 ### 7.1 Start Gunicorn
 > ⚠️ `server.app` must be importable, so either run the command from the repository root or pass `--chdir ~/ASR_webapp`. Otherwise Gunicorn raises `ModuleNotFoundError: No module named 'server'`.
 
-**Option A — depuis le dossier du projet**
+**Option A — from the project folder**
 ```bash
 cd ~/ASR_webapp
 source .venv/bin/activate
 gunicorn -w 2 -b 127.0.0.1:8000 server.app:app
 ```
 
-**Option B — depuis n'importe où**
+**Option B — from anywhere**
 ```bash
 source ~/ASR_webapp/.venv/bin/activate
 gunicorn --chdir ~/ASR_webapp -w 2 -b 127.0.0.1:8000 server.app:app
@@ -155,12 +155,12 @@ sudo caddy run --config ~/Caddyfile.public
 ```bash
 curl -vk https://ai-actionavocats.duckdns.org/health -u xavier:MyPassword
 
-# Test local sans passer par le routeur (utile si votre box ne supporte pas le loopback)
+# Local test without router loopback (useful if your box does not support loopback)
 curl -vk --resolve ai-actionavocats.duckdns.org:443:127.0.0.1 \
      https://ai-actionavocats.duckdns.org/health -u xavier:MyPassword
 ```
 
-> ℹ️ `https://localhost:8443` n'est accessible que lorsque vous lancez le mode local décrit en section 9 avec `Caddyfile.local`. Quand `Caddyfile.public` est utilisé, testez toujours avec votre domaine DuckDNS (port 443).
+> ℹ️ `https://localhost:8443` is only reachable when using the local mode in section 9 with `Caddyfile.local`. When `Caddyfile.public` is used, always test with your DuckDNS domain on port 443.
 
 ## 8. Manage BasicAuth Users
 ### Add a User
@@ -234,80 +234,81 @@ curl -vk --resolve ai-actionavocats.duckdns.org:443:127.0.0.1 \
      https://ai-actionavocats.duckdns.org/health -u xavier:MyPassword
 ```
 
-## 11. Dépannage si l’accès extérieur échoue
-Si le site reste inaccessible depuis la 4G ou l’extérieur, effectue les vérifications suivantes :
+## 11. Troubleshooting External Access
+If the site is unreachable from 4G/external networks, check the following:
 
-1. **IP publique à jour** – Dans WSL, compare `curl https://icanhazip.com` avec `ping ai-actionavocats.duckdns.org`. Si ça diffère, relance `~/duckdns/duck.sh` ou corrige le token.
-2. **Redirection Livebox** – Assure-toi que les ports 80/443 sont NATés vers l’adresse IP *Windows* actuelle (ex. 192.168.1.18). Réserve cette IP dans la box pour éviter tout changement.
-3. **Portproxy Windows → WSL** – L’IP WSL change après un redémarrage. Dans PowerShell administrateur :
+1. **Public IP is current** – In WSL, compare `curl https://icanhazip.com` with `ping ai-actionavocats.duckdns.org`. If they differ, rerun `~/duckdns/duck.sh` or fix the token.
+2. **Router forwarding** – Ensure ports 80/443 are NAT’ed to the current *Windows* LAN IP (e.g., 192.168.1.18). Reserve that IP in the router to prevent changes.
+3. **Windows portproxy → WSL** – WSL IP changes after reboot. In admin PowerShell:
    ```powershell
    wsl hostname -I
    netsh interface portproxy show all
    ```
-   Supprime/recrée les règles si `connectaddress` ne correspond plus à l’IP de WSL.
-4. **Pare-feu Windows** – Vérifie que les règles `Caddy 80` et `Caddy 443` sont actives :
+   Delete/recreate the rules if `connectaddress` no longer matches the WSL IP.
+4. **Windows Firewall** – Confirm rules `Caddy 80` and `Caddy 443` are active:
    ```powershell
    netsh advfirewall firewall show rule name="Caddy 443"
    ```
-   Recrée-les si nécessaire.
-5. **Caddy écoute sur 0.0.0.0** – Dans WSL, pendant que Caddy tourne, vérifie `sudo ss -ltnp '( sport = :443 )'` pour confirmer que le port est ouvert.
-6. **Test externe** – Utilise un smartphone en 4G ou un site comme *yougetsignal.com/open-ports* pour contrôler que les ports 80/443 de ton IP publique sont visibles. Si ce n’est pas le cas, le blocage vient toujours du NAT/pare-feu.
+   Recreate them if needed.
+5. **Caddy listening on 0.0.0.0** – In WSL, while Caddy runs, check `sudo ss -ltnp '( sport = :443 )'` to confirm the port is open.
+6. **External port check** – Use a smartphone on 4G or a site like yougetsignal.com/open-ports to verify that your public IP exposes ports 80/443. If not, the block is still NAT/firewall.
 
-Une fois tous ces points validés, l’accès via `https://ai-actionavocats.duckdns.org` depuis l’extérieur doit répondre `{"status":"ok"}` sur `/health`.
+Once these are green, `https://ai-actionavocats.duckdns.org/health` should return `{"status":"ok"}` from outside.
 
-## 12. Déploiement automatisé via Docker
-Si tu préfères éviter toutes les étapes WSL (installation Python, Caddy, cron DuckDNS, etc.), l’image Docker fournie exécute désormais exactement les mêmes actions : Gunicorn → Caddy (HTTPS/HTTP/3, BasicAuth) → DuckDNS, en supposant seulement que ta Livebox redirige 80/443 vers la machine où tourne Docker.
+## 12. Automated Deployment via Docker
+If you prefer to skip all WSL setup (Python, Caddy, DuckDNS cron, etc.), the provided Docker image performs the same stack: Gunicorn → Caddy (HTTPS/HTTP/3, BasicAuth) → DuckDNS, assuming your router forwards 80/443 to the Docker host.
 
-1. **Construis l’image** (une seule fois ou via CI) :
+1. **Build the image** (once or via CI):
    ```bash
    docker build -t asr-webapp:latest .
    ```
-2. **Prépare les variables sensibles** dans un fichier `.env` :
+2. **Prepare the secrets** in an `.env` file:
    ```bash
    cat <<'EOF' > asr.env
    CADDY_DOMAIN=ai-actionavocats.duckdns.org
-   CADDY_EMAIL=you@example.com        # -> Let's Encrypt notifications (optionnel)
+   CADDY_EMAIL=you@example.com        # Let's Encrypt notifications (optional)
    BASIC_AUTH_USER=xavier
-   BASIC_AUTH_PASSWORD=MotDePasseFort
+   BASIC_AUTH_PASSWORD=StrongPasswordHere
    DUCKDNS_DOMAIN=ai-actionavocats
-   DUCKDNS_TOKEN=TON_TOKEN_DUCKDNS
+   DUCKDNS_TOKEN=YOUR_DUCKDNS_TOKEN
    EOF
    ```
-3. **Lance le conteneur** (host network = bind direct sur 80/443/8000) :
+3. **Run the container** (host network = bind directly on 80/443/8000):
    ```bash
    docker run -d \
      --name asr-webapp \
      --network host \
      --env-file asr.env \
-     -v asr-recordings:/data/recordings \
+     -v asr-recordings:/app/recordings \
      -v caddy-data:/root/.local/share/caddy \
      -v caddy-config:/root/.config/caddy \
      asr-webapp:latest
    ```
-   Pas d’option `--network host` ? publie les ports : `-p 80:80 -p 443:443 -p 8000:8000`.
+   No `--network host`? Publish ports: `-p 80:80 -p 443:443 -p 8000:8000`.
 
-### Comportement de l’image Docker
-- Installation automatique des dépendances Python, ffmpeg, Caddy.
-- Lancement de Gunicorn (`server.app:app`) exactement comme la commande de la section 7.
-- Démarrage de Caddy avec le même Caddyfile (HTTPS, BasicAuth, reverse proxy /upload, fichiers statiques `webapp/`).
-- Mise à jour DuckDNS toutes les 5 minutes si `DUCKDNS_DOMAIN`/`DUCKDNS_TOKEN` sont fournis.
-- Persistance :
-  - `/data/recordings` → uploads (à monter sur un volume/host).
-  - `/root/.local/share/caddy` et `/root/.config/caddy` → certificats et état TLS.
+### Docker Image Behavior
+- Installs Python deps, ffmpeg, Caddy.
+- Runs Gunicorn (`server.app:app`) as in section 7.
+- Starts Caddy with the same config (HTTPS, BasicAuth, reverse proxy /upload, static `webapp/`).
+- Updates DuckDNS every 5 minutes if `DUCKDNS_DOMAIN`/`DUCKDNS_TOKEN` are provided.
+- Persistence:
+  - `/app/recordings` → uploads (recommended mount). Compatibility symlink `/data/recordings` points to it.
+  - Uploads are stored per BasicAuth user: `/app/recordings/<user>/name_timestamp.ext` + `_meta.json`.
+  - `/root/.local/share/caddy` and `/root/.config/caddy` → certificates and TLS state.
 
-### Variables reconnues
+### Variables
 
-| Variable | Rôle | Défaut |
+| Variable | Role | Default |
 | --- | --- | --- |
-| `CADDY_DOMAIN` | Domaine public servi par Caddy (DuckDNS) | `localhost` |
-| `CADDY_EMAIL` | Email ACME (Let’s Encrypt) | vide |
-| `BASIC_AUTH_USER` | Utilisateur BasicAuth | `xavier` |
-| `BASIC_AUTH_PASSWORD` | Mot de passe en clair (hash calculé automatiquement) | `MyPassword` |
-| `BASIC_AUTH_PASSWORD_HASH` | Hash `caddy hash-password` (écrase le mot de passe en clair) | vide |
-| `BASIC_AUTH_EXTRA_USERS` | Paires `user hash` séparées par `;` | vide |
-| `DUCKDNS_DOMAIN` / `DUCKDNS_TOKEN` | Active l’auto-update DuckDNS | désactivé |
-| `DUCKDNS_INTERVAL` | Intervalle en secondes pour DuckDNS | `300` |
-| `GUNICORN_HOST/PORT/WORKERS/THREADS/TIMEOUT` | Options Gunicorn | `0.0.0.0` / `8000` / `4` / `4` / `300` |
-| `UPLOAD_FOLDER` | Chemin pour les uploads | `/data/recordings` |
+| `CADDY_DOMAIN` | Public domain served by Caddy (DuckDNS) | `localhost` |
+| `CADDY_EMAIL` | ACME/Let’s Encrypt email | empty |
+| `BASIC_AUTH_USER` | BasicAuth username | `xavier` |
+| `BASIC_AUTH_PASSWORD` | Plaintext password (hash computed automatically) | `MyPassword` |
+| `BASIC_AUTH_PASSWORD_HASH` | Precomputed `caddy hash-password` (overrides plaintext) | empty |
+| `BASIC_AUTH_EXTRA_USERS` | Extra `user hash` pairs separated by `;` | empty |
+| `DUCKDNS_DOMAIN` / `DUCKDNS_TOKEN` | Enable DuckDNS auto-update | disabled |
+| `DUCKDNS_INTERVAL` | Seconds between DuckDNS updates | `300` |
+| `GUNICORN_HOST/PORT/WORKERS/THREADS/TIMEOUT` | Gunicorn options | `0.0.0.0` / `8000` / `4` / `4` / `300` |
+| `UPLOAD_FOLDER` | Path for uploads (per BasicAuth user) | `/app/recordings` (`/data/recordings` is an alias) |
 
-Ainsi l’unique intervention manuelle restante est de fournir le domaine DuckDNS, le token, les identifiants BasicAuth, puis de lancer le conteneur (et bien sûr de maintenir la redirection Livebox 80/443 vers l’hôte Docker). Toutes les étapes 5 à 10 de ce guide sont exécutées à l’intérieur de l’image.*** End Patch
+With this image, the only manual steps are providing DuckDNS and BasicAuth secrets, then running the container (plus keeping router forwarding 80/443 to the Docker host). All steps 5–10 of this guide happen inside the image.
