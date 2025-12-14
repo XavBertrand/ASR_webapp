@@ -241,19 +241,19 @@
                 </div>
                 <div class="form-grid">
                     <div class="field">
-                        <label for="inputAsrPrompt">Prompt ASR</label>
+                        <label for="inputAsrPrompt">Mots spécifiques</label>
                         <textarea id="inputAsrPrompt" placeholder="Mots cles ou contexte pour guider la transcription."></textarea>
-                        <small>Courts mots cles pour orienter la reconnaissance (restent locaux).</small>
+                        <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
                     </div>
                     <div class="field">
                         <label for="inputSpeakerContext">Contexte intervenants</label>
                         <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                        <small>Description anonymisee des roles/participants.</small>
+                        <small>Description des rôles/participants.</small>
                     </div>
                     <div class="field">
                         <label for="inputMeetingDate">Date de l'entretien</label>
                         <input type="date" id="inputMeetingDate" />
-                        <small>Par defaut : date du jour (YYYY-MM-DD).</small>
+                        <small>Par défaut : date du jour.</small>
                     </div>
                     <div class="field">
                         <label for="inputMeetingReportType">Type de compte rendu</label>
@@ -263,7 +263,7 @@
                             <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
                             <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
                         </select>
-                        <small>Choix unique parmi les 4 categories prises en charge.</small>
+                        <small>Choix unique parmi les 4 catégories prises en charge.</small>
                     </div>
                 </div>
             </div>
@@ -271,7 +271,7 @@
             <div class="panel-grid">
                 <div class="panel audio-preview" id="audioPreview">
                     <div class="panel-head">
-                        <span>Apercu</span>
+                        <span>Aperçu</span>
                         <span class="pill">Audio</span>
                     </div>
                     <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
@@ -283,7 +283,7 @@
                     <div class="progress-track">
                         <div class="progress-bar" id="progressBar"></div>
                     </div>
-                    <p class="muted" id="uploadHint">Pret a envoyer apres un enregistrement.</p>
+                    <p class="muted" id="uploadHint">Prêt à envoyer après un enregistrement.</p>
                 </div>
 
                 <div class="panel file-info" id="fileInfo">
