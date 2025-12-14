@@ -112,6 +112,7 @@ def upload():
     metadata.update(
         {
             "saved_filename": safe_name,
+            "saved_path": os.path.abspath(save_path),
             "user_folder": user_folder,
             "original_filename": f.filename,
             "uploaded_at": datetime.utcnow().isoformat() + "Z",

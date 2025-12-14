@@ -677,9 +677,9 @@
 
                     await send();
                     this.progressBar.style.width = '100%';
-                    this.uploadHint.textContent = 'Envoyé avec succes';
-                    this.updateStatus('Envoi reussi', 'complete');
-                    setTimeout(() => this.resetInterface(), 1500);
+                    this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
+                    this.updateStatus('Envoi réussi', 'complete');
+                    this.btnUpload.disabled = false;
                 } catch (error) {
                     console.error('Erreur lors de lupload:', error);
                     this.updateStatus(`Erreur: ${error.message}`, 'error');
