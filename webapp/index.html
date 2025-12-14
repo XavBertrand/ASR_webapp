@@ -43,8 +43,8 @@
             font-family: 'Roboto', sans-serif;
         }
         .app {
-            height: 100dvh;
-            height: 100vh;
+            height: var(--app-h, 100dvh); /* FIX 100DVH OVERRIDE */
+            min-height: 100vh;
             display: grid;
             grid-template-rows: auto 1fr auto;
         }
@@ -518,17 +518,17 @@
                 this.restoreTab();
                 this.prefillFormValues();
                 this.resizeCanvas();
-                this.updateSystemInsets(); // ANDROID NAV BAR INSET
+                this.updateViewportMetrics(); // ANDROID INSET UPDATE
 
                 const handleResize = () => {
                     this.resizeCanvas();
-                    this.scheduleInsetUpdate();
+                    this.scheduleViewportUpdate();
                 };
                 window.addEventListener('resize', handleResize);
                 window.addEventListener('orientationchange', handleResize);
                 if (window.visualViewport) {
-                    window.visualViewport.addEventListener('resize', () => this.scheduleInsetUpdate());
-                    window.visualViewport.addEventListener('scroll', () => this.scheduleInsetUpdate());
+                    window.visualViewport.addEventListener('resize', () => this.scheduleViewportUpdate());
+                    window.visualViewport.addEventListener('scroll', () => this.scheduleViewportUpdate());
                 }
 
                 if (!this.checkBrowserSupport()) return;
@@ -622,15 +622,21 @@
             }
 
             // VISUAL VIEWPORT
-            scheduleInsetUpdate() {
+            scheduleViewportUpdate() {
                 if (this.insetRaf) cancelAnimationFrame(this.insetRaf);
-                this.insetRaf = requestAnimationFrame(() => this.updateSystemInsets());
+                this.insetRaf = requestAnimationFrame(() => this.updateViewportMetrics());
             }
 
-            updateSystemInsets() {
-                let inset = 0;
+            updateViewportMetrics() {
                 const vv = window.visualViewport;
-                if (vv) {
+                // USE VISUALVIEWPORT HEIGHT
+                const appH = vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight);
+                if (appH) {
+                    document.documentElement.style.setProperty('--app-h', `${appH}px`);
+                }
+                // ANDROID INSET UPDATE
+                let inset = 0;
+                if (vv && typeof vv.height === 'number') {
                     inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
                 }
                 document.documentElement.style.setProperty('--sys-inset-bottom', `${inset}px`); // SAFE AREA FALLBACK + ANDROID NAV BAR INSET
