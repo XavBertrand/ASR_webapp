@@ -39,11 +39,26 @@ log "Uploads seront créés avec UID:GID ${UPLOAD_UID}:${UPLOAD_GID}"
 
 CADDY_DOMAIN="${CADDY_DOMAIN:-localhost}"
 CADDY_EMAIL="${CADDY_EMAIL:-}"
-GUNICORN_HOST="${GUNICORN_HOST:-0.0.0.0}"
+WEBAPP_ENV="${WEBAPP_ENV:-}"
+DEFAULT_BIND_LOCAL_ONLY="false"
+if [[ "${WEBAPP_ENV}" == "production" || "${WEBAPP_ENV}" == "prod" ]]; then
+    DEFAULT_BIND_LOCAL_ONLY="true"
+fi
+GUNICORN_BIND_LOCAL_ONLY="${GUNICORN_BIND_LOCAL_ONLY:-${DEFAULT_BIND_LOCAL_ONLY}}"
+GUNICORN_HOST="${GUNICORN_HOST:-127.0.0.1}"
 GUNICORN_PORT="${GUNICORN_PORT:-8000}"
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 GUNICORN_THREADS="${GUNICORN_THREADS:-4}"
 GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-300}"
+if [[ "${GUNICORN_BIND_LOCAL_ONLY}" == "true" ]]; then
+    GUNICORN_HOST="127.0.0.1"
+fi
+if [[ "${GUNICORN_HOST}" == "0.0.0.0" ]]; then
+    log "WARNING: GUNICORN_HOST=0.0.0.0 — Gunicorn exposé directement (bypass Caddy)."
+    if [[ "${WEBAPP_ENV}" == "production" || "${WEBAPP_ENV}" == "prod" ]]; then
+        log "WARNING: environnement production détecté avec bind 0.0.0.0 (non recommandé)."
+    fi
+fi
 
 GATEWAY_BASICAUTH_USER="${GATEWAY_BASICAUTH_USER:-}"
 GATEWAY_BASICAUTH_HASHED_PASSWORD="${GATEWAY_BASICAUTH_HASHED_PASSWORD:-}"
@@ -64,6 +79,13 @@ log "Using Caddy domain ${CADDY_DOMAIN}"
     printf '}\n\n'
     printf '%s {\n' "${CADDY_DOMAIN}"
     printf '    encode zstd gzip\n\n'
+    printf '    header {\n'
+    printf '        Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; frame-ancestors '\''none'\''"\n'
+    printf '        X-Content-Type-Options "nosniff"\n'
+    printf '        X-Frame-Options "DENY"\n'
+    printf '        Referrer-Policy "strict-origin-when-cross-origin"\n'
+    printf '        Permissions-Policy "geolocation=(), microphone=(), camera=()"\n'
+    printf '    }\n\n'
     if [[ -n "${GATEWAY_BASICAUTH_USER}" && -n "${GATEWAY_BASICAUTH_HASHED_PASSWORD}" ]]; then
         printf '    basic_auth {\n'
         printf '        %s %s\n' "${GATEWAY_BASICAUTH_USER}" "${GATEWAY_BASICAUTH_HASHED_PASSWORD}"

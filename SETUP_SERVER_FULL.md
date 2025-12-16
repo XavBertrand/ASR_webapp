@@ -3,7 +3,7 @@
 End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Application authentication (sessions, roles, 2FA) is handled by the webapp; Caddy only provides an optional single “gateway” BasicAuth lock.
 
 ## Overview
-- Flask/Gunicorn backend on port 8000
+- Flask/Gunicorn backend on 127.0.0.1:8000 (loopback behind Caddy)
 - Caddy reverse proxy (HTTPS/HTTP3, compression) + optional global BasicAuth (`GATEWAY_BASICAUTH_*`)
 - DuckDNS for public domain + IP updates
 - Router NAT 80/443 to Windows; Windows portproxy to WSL
@@ -54,6 +54,13 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
 
      ai-actionavocats.duckdns.org {
          encode zstd gzip
+         header {
+             Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+             X-Content-Type-Options "nosniff"
+             X-Frame-Options "DENY"
+             Referrer-Policy "no-referrer"
+             Permissions-Policy "geolocation=()"
+         }
          # Optional global lock (single pair)
          basic_auth {
              gateway_user GATEWAY_HASH_HERE
@@ -81,9 +88,12 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
 
 6. **App environment variables (must be exported before Gunicorn)**  
    - Required: `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (≥12 chars).  
-   - Optional security: `REQUIRE_ADMIN_2FA=true` to force admin 2FA; `TOTP_ENC_KEY` (Fernet key) to encrypt TOTP secret; `SESSION_COOKIE_SECURE` (default true), `SESSION_COOKIE_SAMESITE` (default Lax).  
+   - Optional security: `REQUIRE_ADMIN_2FA=true` to force admin 2FA; `TOTP_ENC_KEY` (Fernet key) to encrypt TOTP secret; `SESSION_COOKIE_SECURE` (default true), `SESSION_COOKIE_SAMESITE` (default Lax); `WEBAPP_ENV=production` to enable stricter warnings.  
+   - Rate limiting: `RATELIMIT_STORAGE_URL` (`memory://` dev default; set `redis://redis:6379/0` in prod with a Redis backend installed).  
+   - Proxy headers: `TRUST_PROXY_HEADERS=true` only when requests come through a trusted reverse proxy (e.g., Caddy); prevents IP spoofing when Gunicorn is hit directly.  
    - Uploads: `UPLOAD_FOLDER`, `MAX_CONTENT_LENGTH_MB`, `UPLOAD_UID/GID`.  
-   - Gateway lock (used by container entrypoint/Caddyfile): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD`.
+   - Gateway lock (used by container entrypoint/Caddyfile): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD`.  
+   - Gunicorn bind: `GUNICORN_HOST` (default `127.0.0.1`, keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
 7. **Start Gunicorn**  
    ```bash
@@ -91,8 +101,9 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
    export SECRET_KEY=change-me
    export ADMIN_USERNAME=admin
    export ADMIN_PASSWORD=SuperSecureAdmin!
-   uv run gunicorn server.app:app -w 4 -k gthread --threads 4 --bind 0.0.0.0:8000 --timeout 300
+   uv run gunicorn server.app:app -w 4 -k gthread --threads 4 --bind 127.0.0.1:8000 --timeout 300
    ```
+   Gunicorn should stay on loopback when Caddy is in front. Bind to `0.0.0.0` only if you intentionally expose the app directly (not recommended).
 
 8. **Start Caddy (new WSL terminal)**  
    ```bash
@@ -120,7 +131,10 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
 ## Technical notes
 - App auth: session cookies HttpOnly + SameSite=Lax (+ Secure in HTTPS), CSRF on POST/PUT/DELETE (`X-CSRF-Token` or `csrf_token`).  
 - Passwords hashed with Argon2id. Inactive users are denied and session cleared.  
-- Rate limiting: `/login` 5/min IP + 20/hour IP; sensitive admin endpoints 5/min.  
+- Rate limiting: `/login` 5/min IP + 20/hour IP; sensitive admin endpoints 5/min. Backend configurable via `RATELIMIT_STORAGE_URL` (use Redis for multi-worker).  
+- Security headers added by Caddy/Flask: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=no-referrer`, `Permissions-Policy=geolocation=()`.  
+- CORS disabled by default; no `Access-Control-Allow-Origin` header unless explicitly added.  
+- Real client IP trusted only when `TRUST_PROXY_HEADERS=true` (behind Caddy). Direct hits on Gunicorn cannot spoof `X-Forwarded-For`.  
 - Audit in SQLite (`audit_log`).  
-- Admin 2FA via TOTP (pyotp) + hashed recovery codes; secrets can be encrypted with `TOTP_ENC_KEY`.  
+- Admin 2FA via TOTP (pyotp) + hashed recovery codes; secrets can be encrypted with `TOTP_ENC_KEY`. Recovery codes are generated at first setup and only regenerated via the dedicated button (old codes invalidated).  
 - Gateway BasicAuth: single global pair if configured; all per-user auth is handled by the app.

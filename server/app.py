@@ -23,7 +23,6 @@ from flask import (
     current_app,
 )
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
@@ -54,13 +53,12 @@ ALLOWED_EXTENSIONS = {"webm", "wav", "mp3", "ogg", "m4a", "mp4"}
 DEFAULT_MAX_MB = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100"))
 DEFAULT_DB_URI = os.environ.get("DATABASE_URL", f"sqlite:///{ROOT_DIR / 'app.db'}")
 DEFAULT_SAME_SITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+WEBAPP_ENV = os.environ.get("WEBAPP_ENV", "").lower()
 SESSION_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() != "false"
 REQUIRE_ADMIN_2FA = os.environ.get("REQUIRE_ADMIN_2FA", "false").lower() == "true"
 TOTP_ENC_KEY = os.environ.get("TOTP_ENC_KEY")
 
 MAX_CONTENT_LENGTH = DEFAULT_MAX_MB * 1024 * 1024
-
-limiter = Limiter(key_func=get_remote_address, storage_uri=os.environ.get("RATELIMIT_STORAGE_URL", "memory://"))
 
 
 def _parse_env_int(env_name: str) -> int | None:
@@ -122,10 +120,23 @@ def json_error(message: str, code: int) -> Any:
 
 
 def client_ip() -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    trust_proxy = False
+    if current_app:
+        trust_proxy = bool(current_app.config.get("TRUST_PROXY_HEADERS"))
+    if trust_proxy:
+        if request.access_route:
+            return request.access_route[0]
+        if request.remote_addr:
+            return request.remote_addr
+        return ""
     return request.remote_addr or ""
+
+
+def _limiter_key_func() -> str:
+    return client_ip()
+
+
+limiter = Limiter(key_func=_limiter_key_func)
 
 
 def ensure_dirs(app: Flask) -> None:
@@ -147,13 +158,26 @@ def require_secret_key(app: Flask) -> None:
 
 
 def create_app(test_config: dict | None = None) -> Flask:
+    trust_proxy_headers = os.environ.get("TRUST_PROXY_HEADERS", "false").lower() == "true"
+    ratelimit_storage = os.environ.get("RATELIMIT_STORAGE_URL", "memory://")
+    scheme = ratelimit_storage.split("://", 1)[0]
+    if scheme.startswith("redis"):
+        try:
+            import redis  # type: ignore # noqa: F401
+        except ImportError:
+            logger.warning(
+                "Limiter backend %s demandé mais le client redis n'est pas installé — fallback sur memory://",
+                ratelimit_storage,
+            )
+            ratelimit_storage = "memory://"
+    webapp_env = os.environ.get("WEBAPP_ENV", WEBAPP_ENV).lower()
+
     app = Flask(
         __name__,
         static_folder=str(ROOT_DIR / "webapp"),
         static_url_path="",
         template_folder=str(BASE_DIR / "templates"),
     )
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     app.config.update(
         UPLOAD_FOLDER=DEFAULT_UPLOAD_FOLDER,
@@ -165,6 +189,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         SESSION_COOKIE_SAMESITE=DEFAULT_SAME_SITE,
         PREFERRED_URL_SCHEME="https",
         REQUIRE_ADMIN_2FA=REQUIRE_ADMIN_2FA,
+        TRUST_PROXY_HEADERS=trust_proxy_headers,
+        WEBAPP_ENV=webapp_env,
+        RATELIMIT_STORAGE_URL=ratelimit_storage,
+        RATELIMIT_STORAGE_URI=ratelimit_storage,
         PERMANENT_SESSION_LIFETIME=timedelta(
             hours=int(os.environ.get("SESSION_LIFETIME_HOURS", "12"))
         ),
@@ -173,10 +201,15 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
+    if app.config.get("TRUST_PROXY_HEADERS"):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
     require_secret_key(app)
 
     db.init_app(app)
     limiter.init_app(app)
+    if app.config["RATELIMIT_STORAGE_URL"] == "memory://" and app.config.get("WEBAPP_ENV") == "production":
+        logger.warning("Limiter not shared across workers (memory backend). Configure RATELIMIT_STORAGE_URL=redis://...")
     app.config["TOTP_FERNET"] = make_fernet(TOTP_ENC_KEY)
 
     ensure_dirs(app)
@@ -289,6 +322,22 @@ def persist_csrf_cookie(response):
     return response
 
 
+def apply_security_headers(response):
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "frame-ancestors 'none'"
+    )
+    response.headers.setdefault("Content-Security-Policy", csp)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    return response
+
+
 def login_required(fn: Callable) -> Callable:
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -358,6 +407,7 @@ def user_can_access_path(user: User, fname: str) -> bool:
 
 def register_routes(app: Flask) -> None:
     app.before_request(load_current_user)
+    app.after_request(apply_security_headers)
     app.after_request(persist_csrf_cookie)
 
     @app.errorhandler(429)
@@ -684,7 +734,9 @@ def register_routes(app: Flask) -> None:
     def admin_2fa_setup():
         if g.current_user.role != "admin":
             return json_error("Accès réservé aux administrateurs", 403)
-        secret_plain, codes = ensure_totp_materials(app, g.current_user)
+        secret_plain = ensure_totp_secret(app, g.current_user)
+        new_codes = ensure_recovery_codes(g.current_user)
+        has_recovery_codes = RecoveryCode.query.filter_by(user_id=g.current_user.id).count() > 0
         provisioning_uri = totp_from_secret(secret_plain).provisioning_uri(
             name=g.current_user.username, issuer_name="ASR WebApp"
         )
@@ -692,9 +744,10 @@ def register_routes(app: Flask) -> None:
             "admin_2fa_setup.html",
             secret=secret_plain,
             provisioning_uri=provisioning_uri,
-            recovery_codes=codes,
+            recovery_codes=new_codes or [],
             csrf_token=g.csrf_token,
             twofa_enabled=g.current_user.twofa_enabled,
+            has_recovery_codes=has_recovery_codes,
         )
 
     @app.post("/admin/2fa/verify")
@@ -722,8 +775,22 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify({"ok": True})
 
+    @app.post("/admin/2fa/recovery/regenerate")
+    @admin_required
+    def admin_2fa_recovery_regenerate():
+        ensure_totp_secret(app, g.current_user)
+        codes = regenerate_recovery_codes(g.current_user)
+        log_action(
+            action="2fa_recovery_regenerate",
+            actor=g.current_user,
+            target=g.current_user,
+            ip=client_ip(),
+            user_agent=request.headers.get("User-Agent"),
+        )
+        return jsonify({"ok": True, "recovery_codes": codes})
 
-def ensure_totp_materials(app: Flask, user: User) -> tuple[str, list[str]]:
+
+def ensure_totp_secret(app: Flask, user: User) -> str:
     secret_plain = decrypt_secret(user.totp_secret, app.config["TOTP_FERNET"])
     if not secret_plain:
         secret_plain = generate_totp_secret()
@@ -731,13 +798,25 @@ def ensure_totp_materials(app: Flask, user: User) -> tuple[str, list[str]]:
         user.totp_secret = stored
         user.totp_encrypted = encrypted
         user.twofa_enabled = False
+    db.session.commit()
+    return secret_plain
+
+
+def regenerate_recovery_codes(user: User) -> list[str]:
     recovery_codes_plain = generate_recovery_codes()
     hashed = hash_recovery_codes(recovery_codes_plain)
     RecoveryCode.query.filter_by(user_id=user.id).delete()
     for h in hashed:
         db.session.add(RecoveryCode(user_id=user.id, code_hash=h))
     db.session.commit()
-    return secret_plain, recovery_codes_plain
+    return recovery_codes_plain
+
+
+def ensure_recovery_codes(user: User) -> list[str] | None:
+    existing = RecoveryCode.query.filter_by(user_id=user.id).count()
+    if existing == 0:
+        return regenerate_recovery_codes(user)
+    return None
 
 
 def extract_metadata(req_form) -> dict:

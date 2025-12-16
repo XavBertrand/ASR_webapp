@@ -2,33 +2,41 @@ import io
 import json
 import re
 from datetime import datetime
+from pathlib import Path
 
 import pyotp
 import pytest
 
-from server.app import create_app
+from server.app import client_ip, create_app
 from server.models import AuditLog, RecoveryCode, User, db
 from server.security import hash_password
 
 
-@pytest.fixture()
-def app(tmp_path, monkeypatch):
+def build_app(tmp_path, monkeypatch, *, extra_env: dict | None = None, config: dict | None = None):
     monkeypatch.setenv("ASR_WEBAPP_SKIP_AUTOAPP", "1")
     monkeypatch.setenv("ADMIN_USERNAME", "admin")
     monkeypatch.setenv("ADMIN_PASSWORD", "SuperSecureAdmin!")
     monkeypatch.setenv("SECRET_KEY", "testing-secret")
+    if extra_env:
+        for key, value in extra_env.items():
+            monkeypatch.setenv(key, value)
     upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    app = create_app(
-        {
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
-            "UPLOAD_FOLDER": str(upload_dir),
-            "MAX_CONTENT_LENGTH": 5 * 1024 * 1024,
-            "SESSION_COOKIE_SECURE": False,
-        }
-    )
-    return app
+    upload_dir.mkdir(exist_ok=True)
+    base_config = {
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "UPLOAD_FOLDER": str(upload_dir),
+        "MAX_CONTENT_LENGTH": 5 * 1024 * 1024,
+        "SESSION_COOKIE_SECURE": False,
+    }
+    if config:
+        base_config.update(config)
+    return create_app(base_config)
+
+
+@pytest.fixture()
+def app(tmp_path, monkeypatch):
+    return build_app(tmp_path, monkeypatch)
 
 
 @pytest.fixture()
@@ -166,7 +174,11 @@ def test_admin_2fa_flow_and_recovery_codes(client, app):
         csrf = sess["csrf_token"]
     setup_resp = client.get("/admin/2fa/setup")
     assert setup_resp.status_code == 200
-    secret = parse_secret_from_html(setup_resp.data.decode())
+    setup_html = setup_resp.data.decode()
+    secret = parse_secret_from_html(setup_html)
+    codes = parse_recovery_codes_from_html(setup_html)
+    assert codes
+    recovery_codes = list(codes)
     otp = pyotp.TOTP(secret).now()
     verify_resp = client.post(
         "/admin/2fa/verify",
@@ -187,14 +199,11 @@ def test_admin_2fa_flow_and_recovery_codes(client, app):
     # recovery code works once
     with client.session_transaction() as sess:
         csrf2 = sess["csrf_token"]
-    setup_resp2 = client.get("/admin/2fa/setup")
-    codes = parse_recovery_codes_from_html(setup_resp2.data.decode())
-    assert codes
     client.post("/logout", data={"csrf_token": csrf2})
-    rec_login = login(client, "admin", "SuperSecureAdmin!", otp=codes[0])
+    rec_login = login(client, "admin", "SuperSecureAdmin!", otp=recovery_codes[0])
     assert rec_login.status_code in (302, 200)
     client.post("/logout", data={"csrf_token": set_csrf(client)})
-    rec_login_again = login(client, "admin", "SuperSecureAdmin!", otp=codes[0])
+    rec_login_again = login(client, "admin", "SuperSecureAdmin!", otp=recovery_codes[0])
     assert rec_login_again.status_code == 401
     with app.app_context():
         assert RecoveryCode.query.filter(RecoveryCode.used_at.isnot(None)).count() >= 1
@@ -216,3 +225,106 @@ def test_admin_endpoints_reject_when_not_verified_2fa(client, app, monkeypatch):
         sess["twofa_verified"] = False
     resp = client.get("/admin/users")
     assert resp.status_code in (302, 401)
+
+
+def test_recovery_codes_not_regenerated_on_get(client, app):
+    login(client, "admin", "SuperSecureAdmin!")
+    setup1 = client.get("/admin/2fa/setup")
+    codes_first = parse_recovery_codes_from_html(setup1.data.decode())
+    assert codes_first
+    with app.app_context():
+        admin = User.query.filter_by(username="admin").first()
+        initial_hashes = [rc.code_hash for rc in RecoveryCode.query.filter_by(user_id=admin.id).all()]
+    setup2 = client.get("/admin/2fa/setup")
+    codes_second = parse_recovery_codes_from_html(setup2.data.decode())
+    assert codes_second == []
+    with app.app_context():
+        admin = User.query.filter_by(username="admin").first()
+        hashes_after = [rc.code_hash for rc in RecoveryCode.query.filter_by(user_id=admin.id).all()]
+        assert hashes_after == initial_hashes
+
+
+def test_recovery_regenerate_endpoint_changes_codes(client, app):
+    login(client, "admin", "SuperSecureAdmin!")
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    setup_resp = client.get("/admin/2fa/setup")
+    secret = parse_secret_from_html(setup_resp.data.decode())
+    initial_codes = parse_recovery_codes_from_html(setup_resp.data.decode())
+    otp = pyotp.TOTP(secret).now()
+    client.post("/admin/2fa/verify", json={"otp": otp}, headers={"X-CSRF-Token": csrf})
+    regen = client.post("/admin/2fa/recovery/regenerate", json={}, headers={"X-CSRF-Token": csrf})
+    assert regen.status_code == 200
+    data = regen.get_json()
+    assert data["recovery_codes"]
+    new_codes = data["recovery_codes"]
+    assert set(new_codes) != set(initial_codes)
+    client.post("/logout", data={"csrf_token": csrf})
+    old = login(client, "admin", "SuperSecureAdmin!", otp=initial_codes[0])
+    assert old.status_code == 401
+    fresh = login(client, "admin", "SuperSecureAdmin!", otp=new_codes[0])
+    assert fresh.status_code in (302, 200)
+    with app.app_context():
+        admin = User.query.filter_by(username="admin").first()
+        new_hashes = [rc.code_hash for rc in RecoveryCode.query.filter_by(user_id=admin.id).all()]
+        assert len(new_hashes) > 0
+        assert AuditLog.query.filter_by(action="2fa_recovery_regenerate", actor_user_id=admin.id).count() >= 1
+
+
+def test_client_ip_ignores_xff_when_not_trusted(tmp_path, monkeypatch):
+    app = build_app(tmp_path, monkeypatch, extra_env={"TRUST_PROXY_HEADERS": "false"})
+
+    @app.get("/ip")
+    def get_ip():
+        return {"ip": client_ip()}
+
+    client = app.test_client()
+    resp = client.get("/ip", headers={"X-Forwarded-For": "1.2.3.4"}, environ_overrides={"REMOTE_ADDR": "9.9.9.9"})
+    assert resp.status_code == 200
+    assert resp.get_json()["ip"] == "9.9.9.9"
+
+
+def test_client_ip_respects_trusted_proxy_headers(tmp_path, monkeypatch):
+    app = build_app(tmp_path, monkeypatch, extra_env={"TRUST_PROXY_HEADERS": "true"})
+
+    @app.get("/ip")
+    def get_ip():
+        return {"ip": client_ip()}
+
+    client = app.test_client()
+    resp = client.get(
+        "/ip",
+        headers={"X-Forwarded-For": "1.2.3.4, 5.5.5.5"},
+        environ_overrides={"REMOTE_ADDR": "9.9.9.9"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["ip"] == "1.2.3.4"
+
+
+def test_ratelimit_storage_env(monkeypatch, tmp_path):
+    storage_url = "memory://?namespace=test"
+    app = build_app(tmp_path, monkeypatch, extra_env={"RATELIMIT_STORAGE_URL": storage_url})
+    assert app.config["RATELIMIT_STORAGE_URL"] == storage_url
+    from server.app import limiter
+
+    assert getattr(limiter, "_storage", None) is not None
+
+
+def test_security_headers_present(client):
+    resp = client.get("/login")
+    assert resp.headers.get("Content-Security-Policy")
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert resp.headers.get("X-Frame-Options") == "DENY"
+    assert resp.headers.get("Referrer-Policy") == "no-referrer"
+    assert resp.headers.get("Permissions-Policy") == "geolocation=()"
+
+
+def test_no_cors_header_on_login(client):
+    resp = client.get("/login")
+    assert "Access-Control-Allow-Origin" not in resp.headers
+
+
+def test_gunicorn_default_host_loopback():
+    entrypoint = Path(__file__).resolve().parent.parent / "docker" / "entrypoint.sh"
+    content = entrypoint.read_text()
+    assert 'GUNICORN_HOST="${GUNICORN_HOST:-127.0.0.1}"' in content

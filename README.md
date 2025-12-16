@@ -9,17 +9,18 @@ Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with applicatio
 ## Authentication flow
 - Username/password login with session cookies (HttpOnly + SameSite=Lax + Secure when HTTPS). Session is rotated on login.
 - CSRF required on all POST/PUT/DELETE (header `X-CSRF-Token` or form field `csrf_token`; token is stored in session and exposed via a readable `csrf_token` cookie).
-+- RBAC: `/admin/*` is admin-only; `is_active=False` users are denied and their session is cleared.
-- Rate limiting: `/login` limited (5/min/IP + 20/hour/IP); sensitive admin endpoints limited (5/min).
+- RBAC: `/admin/*` is admin-only; `is_active=False` users are denied and their session is cleared.
+- Rate limiting: `/login` limited (5/min/IP + 20/hour/IP); sensitive admin endpoints limited (5/min). Backend configurable via `RATELIMIT_STORAGE_URL` (dev: memory; prod: shared Redis).
+- Real client IP only trusted via `TRUST_PROXY_HEADERS=true` (when behind a trusted reverse proxy). Direct hits on Gunicorn cannot spoof `X-Forwarded-For`.
 - Audit log: login success/fail, logout, user creation, password reset, active toggle, enable 2FA, recovery code use, bootstrap admin.
-- Admin 2FA (TOTP): if `REQUIRE_ADMIN_2FA=true`, admins are redirected to `/admin/2fa/setup` before any admin page. Secrets can be encrypted with `TOTP_ENC_KEY`. Recovery codes are shown once and stored hashed.
+- Admin 2FA (TOTP): if `REQUIRE_ADMIN_2FA=true`, admins are redirected to `/admin/2fa/setup` before any admin page. Secrets can be encrypted with `TOTP_ENC_KEY`. Recovery codes are generated only on demand (first setup or explicit “Regenerate”), shown once, and stored hashed.
 
 ## Key environment variables
 - Required: `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (≥12 chars). A bootstrap admin is created at startup if none exists.
-- Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (memory:// by default).
+- Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (`memory://` by default; set `redis://...` for shared rate limits), `WEBAPP_ENV` (set to `production` to surface stricter warnings), `TRUST_PROXY_HEADERS` (true only when behind a trusted reverse proxy).
 - Uploads: `UPLOAD_FOLDER` (./recordings default), `MAX_CONTENT_LENGTH_MB` (default 100), `UPLOAD_UID` / `UPLOAD_GID` to chown uploads.
 - Gateway BasicAuth (Caddy, optional, global): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD` (from `caddy hash-password --plaintext '...'`). If empty, the Caddy lock is disabled.
-- Gunicorn: `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
+- Gunicorn: `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
 ## CLI (optional, everything is also doable in the UI)
 ```bash
@@ -35,7 +36,7 @@ uv run python -m server.manage enable-user --username bob
 - `/`: main webapp (upload). “Administration” link only appears for admins.
 - `/admin/users`: list users, create, reset password, toggle active/inactive.
 - `/admin/audit`: browse audit actions with simple filters.
-- `/admin/2fa/setup`: TOTP secret/URI + recovery codes; validate OTP to enable 2FA.
+- `/admin/2fa/setup`: TOTP secret/URI + recovery codes; validate OTP to enable 2FA; regenerate recovery codes explicitly (old codes invalidated).
 - `/health`: public.
 
 ## Quick dev install
@@ -64,20 +65,23 @@ EOF
 docker run -d \
   --name asr-webapp \
   --env-file .env \
-  -p 80:80 -p 443:443 -p 8000:8000 \
+  -p 80:80 -p 443:443 \
   -v "$(pwd)/recordings:/app/recordings" \
   -v caddy-data:/root/.local/share/caddy \
   -v caddy-config:/root/.config/caddy \
   asr-webapp:latest
 ```
-Caddy keeps a single optional global BasicAuth pair if configured. All user auth is managed by the app.
+Caddy keeps a single optional global BasicAuth pair if configured. All user auth is managed by the app. When Caddy is enabled, keep Gunicorn bound to loopback (`GUNICORN_HOST=127.0.0.1`) so it is not reachable directly.
 
 ## Security
 - Argon2id password hashing; no plaintext passwords stored or logged.
 - CSRF on all state-changing routes; token in session + readable cookie.
 - Session cookies: HttpOnly + SameSite=Lax (+ Secure in HTTPS). Session rotation on login.
 - Admin 2FA via TOTP (pyotp), hashed recovery codes; secrets can be encrypted with `TOTP_ENC_KEY`.
-- Rate limiting via Flask-Limiter.
+- Rate limiting via Flask-Limiter; shared backend configurable with `RATELIMIT_STORAGE_URL`.
+- Security headers sent by Flask/Caddy: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=no-referrer`, `Permissions-Policy=geolocation=()`.
+- CORS is disabled by default; no `Access-Control-Allow-Origin` header is sent unless explicitly configured.
+- Real client IP is only trusted when `TRUST_PROXY_HEADERS=true` (behind a trusted reverse proxy such as Caddy).
 - Persistent audit log in SQLite (`audit_log`: ts, actor, target, action, ip, user-agent, metadata_json).
 
 ## Tests

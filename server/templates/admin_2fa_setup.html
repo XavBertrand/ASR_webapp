@@ -18,6 +18,8 @@
         button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; margin-top: 10px; }
         .codes { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-top: 10px; }
         .code { background: #0f1624; border: 1px dashed #1f2937; border-radius: 10px; padding: 8px 10px; font-family: monospace; }
+        .muted { color: #9ca3af; font-size: 0.95rem; }
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -42,10 +44,23 @@
         <section class="card">
             <h2>Codes de récupération</h2>
             <p>Copiez-les et stockez-les de manière sûre. Chaque code est utilisable une seule fois.</p>
-            <div class="codes">
-                {% for code in recovery_codes %}
-                    <div class="code">{{ code }}</div>
-                {% endfor %}
+            <div class="codes" id="codes-container">
+                {% if recovery_codes %}
+                    {% for code in recovery_codes %}
+                        <div class="code">{{ code }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            {% if recovery_codes %}
+                <p class="muted">Ces codes sont affichés une seule fois. Générer un nouvel ensemble invalide tous les anciens.</p>
+            {% elif has_recovery_codes %}
+                <p class="muted">Des codes de récupération existent déjà. Utilisez “Regenerate recovery codes” pour en obtenir de nouveaux (cela invalide les anciens).</p>
+            {% else %}
+                <p class="muted">Aucun code de récupération n’a encore été généré. Ils apparaîtront ici lors du premier setup.</p>
+            {% endif %}
+            <div class="row">
+                <button id="regen-codes" type="button">Regenerate recovery codes</button>
+                <span id="regen-status" class="muted"></span>
             </div>
         </section>
 
@@ -63,6 +78,43 @@
 
     <script>
         const csrfToken = "{{ csrf_token }}";
+        const regenBtn = document.getElementById('regen-codes');
+        const regenStatus = document.getElementById('regen-status');
+        const codesContainer = document.getElementById('codes-container');
+        regenBtn.addEventListener('click', async () => {
+            if (!confirm('Regénérer les codes ? Les anciens seront invalidés.')) {
+                return;
+            }
+            regenBtn.disabled = true;
+            regenStatus.textContent = 'Génération...';
+            try {
+                const res = await fetch('/admin/2fa/recovery/regenerate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok && data.recovery_codes) {
+                    regenStatus.textContent = 'Nouveaux codes générés (affichés ci-dessous).';
+                    if (codesContainer) {
+                        codesContainer.innerHTML = '';
+                        data.recovery_codes.forEach((c) => {
+                            const div = document.createElement('div');
+                            div.className = 'code';
+                            div.textContent = c;
+                            codesContainer.appendChild(div);
+                        });
+                    }
+                } else {
+                    regenStatus.textContent = data.error || 'Erreur lors de la régénération.';
+                }
+            } catch (err) {
+                regenStatus.textContent = 'Erreur réseau lors de la régénération.';
+            } finally {
+                regenBtn.disabled = false;
+            }
+        });
+
         document.getElementById('verify-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const otp = e.target.otp.value;
