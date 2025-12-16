@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion - ASR WebApp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #0b1220; color: #e5e7eb; display: grid; place-items: center; min-height: 100vh; }
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 24px; width: min(420px, 92%); box-shadow: 0 12px 28px rgba(0,0,0,0.28); }
+        h1 { margin: 0 0 12px; font-size: 1.4rem; }
+        label { display: block; margin-top: 12px; font-weight: 600; }
+        input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
+        button { margin-top: 16px; width: 100%; padding: 12px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; }
+        .error { background: #1f2937; border: 1px solid #ef4444; color: #fecdd3; padding: 10px 12px; border-radius: 10px; margin-top: 10px; }
+        small { color: #9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Connexion</h1>
+        <form method="post" action="/login">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="username">Identifiant</label>
+            <input id="username" name="username" autocomplete="username" required>
+
+            <label for="password">Mot de passe</label>
+            <input id="password" type="password" name="password" autocomplete="current-password" required>
+
+            <label for="otp">Code OTP (admins avec 2FA)</label>
+            <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+
+            <button type="submit">Se connecter</button>
+        </form>
+        <div class="hint">
+            <small>L’authentification admin exige un mot de passe robuste et, si activé, un OTP ou un code de récupération.</small>
+        </div>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>

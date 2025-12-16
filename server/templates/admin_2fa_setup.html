@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Activation 2FA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
+        h1 { margin: 0; font-size: 1.2rem; }
+        main { padding: 16px 20px; display: grid; gap: 16px; max-width: 900px; margin: 0 auto; }
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
+        code { background: #0f1624; padding: 4px 6px; border-radius: 6px; }
+        ul { padding-left: 18px; }
+        label { display: block; margin-top: 10px; font-weight: 600; }
+        input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
+        button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; margin-top: 10px; }
+        .codes { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-top: 10px; }
+        .code { background: #0f1624; border: 1px dashed #1f2937; border-radius: 10px; padding: 8px 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Activation 2FA Admin</h1>
+        <div class="actions">
+            <a href="/admin/users" style="color:#93c5fd;">Retour</a>
+        </div>
+    </header>
+    <main>
+        <section class="card">
+            <p>Scannez ce secret dans votre app TOTP (FreeOTP, Aegis, Google Authenticator...)</p>
+            <p>Secret: <code>{{ secret }}</code></p>
+            <p>URI: <code>{{ provisioning_uri }}</code></p>
+            {% if twofa_enabled %}
+                <p>2FA déjà activée. Vous pouvez régénérer les codes de récupération ci-dessous.</p>
+            {% else %}
+                <p>Une fois scanné, saisissez un OTP ci-dessous pour activer.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <h2>Codes de récupération</h2>
+            <p>Copiez-les et stockez-les de manière sûre. Chaque code est utilisable une seule fois.</p>
+            <div class="codes">
+                {% for code in recovery_codes %}
+                    <div class="code">{{ code }}</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Valider l’OTP</h2>
+            <form id="verify-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label for="otp">Code à 6 chiffres</label>
+                <input id="otp" name="otp" inputmode="numeric" required>
+                <button type="submit">Valider</button>
+            </form>
+            <div id="result"></div>
+        </section>
+    </main>
+
+    <script>
+        const csrfToken = "{{ csrf_token }}";
+        document.getElementById('verify-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const otp = e.target.otp.value;
+            const res = await fetch('/admin/2fa/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                body: JSON.stringify({otp}),
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            const result = document.getElementById('result');
+            if (res.ok) {
+                result.textContent = '2FA activée. Vous pouvez retourner sur /admin/users.';
+                result.style.color = '#34d399';
+            } else {
+                result.textContent = data.error || 'OTP invalide';
+                result.style.color = '#fca5a5';
+            }
+        });
+    </script>
+</body>
+</html>
