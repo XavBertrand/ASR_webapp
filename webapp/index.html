@@ -61,13 +61,16 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 12px;
         }
+        .header-actions { display: flex; align-items: center; gap: 10px; }
 
         .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
         .brand img { width: 42px; height: 42px; object-fit: contain; border-radius: 10px; background: #1f2937; padding: 8px; }
         .brand small { display: block; font-weight: 500; color: var(--text-sub); }
 
         .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
+        .admin-link { display: none; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--primary); color: var(--primary); text-decoration: none; font-weight: 700; background: rgba(59,130,246,0.12); }
 
         .tabbar {
             border-top: 1px solid var(--stroke);
@@ -355,7 +358,10 @@
                     <small>Enregistreur ASR</small>
                 </div>
             </div>
-            <div class="lang">FR</div>
+            <div class="header-actions">
+                <a id="admin-link" class="admin-link" href="/admin/users">Administration</a>
+                <div class="lang">FR</div>
+            </div>
         </header>
         <div class="tabbar">
             <div class="tablist" role="tablist" aria-label="Navigation principale">
@@ -1105,11 +1111,13 @@
                     formData.append('meeting_report_type', metadata.meeting_report_type);
 
                     const targetUrl = this.buildUrl('/upload');
-                    const send = (authHeader = null) => new Promise((resolve, reject) => {
+                    const send = () => new Promise((resolve, reject) => {
                         const xhr = new XMLHttpRequest();
                         xhr.open('POST', targetUrl);
-                        if (authHeader) {
-                            xhr.setRequestHeader('Authorization', authHeader);
+                        xhr.withCredentials = true;
+                        const csrf = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
+                        if (csrf) {
+                            xhr.setRequestHeader('X-CSRF-Token', decodeURIComponent(csrf.split('=')[1]));
                         }
 
                         xhr.upload.onprogress = (event) => {
@@ -1122,15 +1130,8 @@
                         xhr.onload = () => {
                             if (xhr.status === 200 || xhr.status === 201) {
                                 resolve(xhr.responseText);
-                            } else if (xhr.status === 401 && !authHeader) {
-                                const user = prompt("Nom d'utilisateur (Basic Auth) :");
-                                const pass = prompt('Mot de passe :');
-                                if (user && pass) {
-                                    const auth = 'Basic ' + btoa(`${user}:${pass}`);
-                                    send(auth).then(resolve).catch(reject);
-                                } else {
-                                    reject(new Error('Authentification requise'));
-                                }
+                            } else if (xhr.status === 401) {
+                                window.location.href = '/login';
                             } else {
                                 const body = xhr.responseText || '';
                                 reject(new Error(`Erreur serveur: ${xhr.status} ${body}`));
@@ -1362,7 +1363,25 @@
             }
         }
 
+        async function setupAdminLink() {
+            try {
+                const res = await fetch('/api/me', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.role === 'admin') {
+                    const link = document.getElementById('admin-link');
+                    if (link) {
+                        link.style.display = 'inline-flex';
+                        link.href = '/admin/users';
+                    }
+                }
+            } catch (err) {
+                console.debug('Admin link check failed', err);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            setupAdminLink();
             new RecorderApp();
         });
 
