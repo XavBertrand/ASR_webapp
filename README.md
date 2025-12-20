@@ -20,7 +20,7 @@ Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with applicatio
 - Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (`memory://` by default; set `redis://...` for shared rate limits), `WEBAPP_ENV` (set to `production` to surface stricter warnings), `TRUST_PROXY_HEADERS` (true only when behind a trusted reverse proxy).
 - Uploads: `UPLOAD_FOLDER` (./recordings default), `MAX_CONTENT_LENGTH_MB` (default 100), `UPLOAD_UID` / `UPLOAD_GID` to chown uploads.
 - Gateway BasicAuth (Caddy, optional, global): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD` (from `caddy hash-password --plaintext '...'`). If empty, the Caddy lock is disabled.
-- Gunicorn: `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
+- Gunicorn: `GUNICORN_BIND_LOCAL_ONLY` (default true in production; forces bind on loopback), `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
 ## CLI (optional, everything is also doable in the UI)
 ```bash
@@ -49,6 +49,12 @@ uv run python -m server.app
 ```
 Open http://127.0.0.1:8000/login, log in, and create users from `/admin/users`.
 
+## Réinitialisation de mot de passe
+- Lien “Mot de passe oublié ?” sur `/login`. La réponse est toujours générique pour éviter l’énumération.
+- Si SMTP est configuré, un email est envoyé; sinon le lien est journalisé côté serveur (niveau WARNING) et visible dans l’audit (`password_reset_requested`).
+- Jetons à usage unique, expirent après `RESET_TOKEN_TTL_MINUTES` (30 par défaut), invalidés dès qu’un mot de passe est réinitialisé.
+- Variables SMTP : `MAIL_HOST`, `MAIL_PORT` (587 par défaut), `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_USE_TLS` (true/false).
+
 ## Docker
 ```bash
 docker build -t asr-webapp:latest .
@@ -71,7 +77,7 @@ docker run -d \
   -v caddy-config:/root/.config/caddy \
   asr-webapp:latest
 ```
-Caddy keeps a single optional global BasicAuth pair if configured. All user auth is managed by the app. When Caddy is enabled, keep Gunicorn bound to loopback (`GUNICORN_HOST=127.0.0.1`) so it is not reachable directly.
+Caddy keeps a single optional global BasicAuth pair if configured. All user auth is managed by the app. When Caddy is enabled, keep Gunicorn bound to loopback (`GUNICORN_BIND_LOCAL_ONLY=true`, `GUNICORN_HOST=127.0.0.1`) so it is not reachable directly; avoid `--network host` unless you intentionally expose port 8000 (not recommended).
 
 ## Security
 - Argon2id password hashing; no plaintext passwords stored or logged.
@@ -79,7 +85,7 @@ Caddy keeps a single optional global BasicAuth pair if configured. All user auth
 - Session cookies: HttpOnly + SameSite=Lax (+ Secure in HTTPS). Session rotation on login.
 - Admin 2FA via TOTP (pyotp), hashed recovery codes; secrets can be encrypted with `TOTP_ENC_KEY`.
 - Rate limiting via Flask-Limiter; shared backend configurable with `RATELIMIT_STORAGE_URL`.
-- Security headers sent by Flask/Caddy: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=no-referrer`, `Permissions-Policy=geolocation=()`.
+- Security headers sent by Flask/Caddy: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=strict-origin-when-cross-origin`, `Permissions-Policy=geolocation=(), microphone=(), camera=()`.
 - CORS is disabled by default; no `Access-Control-Allow-Origin` header is sent unless explicitly configured.
 - Real client IP is only trusted when `TRUST_PROXY_HEADERS=true` (behind a trusted reverse proxy such as Caddy).
 - Persistent audit log in SQLite (`audit_log`: ts, actor, target, action, ip, user-agent, metadata_json).

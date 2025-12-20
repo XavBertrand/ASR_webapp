@@ -93,7 +93,7 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
    - Proxy headers: `TRUST_PROXY_HEADERS=true` only when requests come through a trusted reverse proxy (e.g., Caddy); prevents IP spoofing when Gunicorn is hit directly.  
    - Uploads: `UPLOAD_FOLDER`, `MAX_CONTENT_LENGTH_MB`, `UPLOAD_UID/GID`.  
    - Gateway lock (used by container entrypoint/Caddyfile): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD`.  
-   - Gunicorn bind: `GUNICORN_HOST` (default `127.0.0.1`, keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
+   - Gunicorn bind: `GUNICORN_BIND_LOCAL_ONLY` (default true in production; forces loopback), `GUNICORN_HOST` (default `127.0.0.1`, keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
 7. **Start Gunicorn**  
    ```bash
@@ -103,13 +103,21 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
    export ADMIN_PASSWORD=SuperSecureAdmin!
    uv run gunicorn server.app:app -w 4 -k gthread --threads 4 --bind 127.0.0.1:8000 --timeout 300
    ```
-   Gunicorn should stay on loopback when Caddy is in front. Bind to `0.0.0.0` only if you intentionally expose the app directly (not recommended).
+   Gunicorn should stay on loopback when Caddy is in front (set `GUNICORN_BIND_LOCAL_ONLY=true`). Bind to `0.0.0.0` only if you intentionally expose the app directly (not recommended). Avoid `--network host` unless you understand it will expose port 8000 unless loopback is enforced.
 
 8. **Start Caddy (new WSL terminal)**  
    ```bash
    caddy fmt --overwrite ~/Caddyfile.public
    sudo pkill -f 'caddy run' || true
    sudo caddy run --config ~/Caddyfile.public --adapter caddyfile
+   ```
+   For development & tests, server can be launched without reunning gunicorn and caddy with:
+   ```bash 
+   export UV_CACHE_DIR=.uv_cache
+   export SECRET_KEY=dev-secret 
+   export ADMIN_USERNAME=admin 
+   export ADMIN_PASSWORD=SuperSecureAdmin! 
+   uv run python -m server.app
    ```
 
 9. **Usage flow**  
@@ -132,7 +140,7 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
 - App auth: session cookies HttpOnly + SameSite=Lax (+ Secure in HTTPS), CSRF on POST/PUT/DELETE (`X-CSRF-Token` or `csrf_token`).  
 - Passwords hashed with Argon2id. Inactive users are denied and session cleared.  
 - Rate limiting: `/login` 5/min IP + 20/hour IP; sensitive admin endpoints 5/min. Backend configurable via `RATELIMIT_STORAGE_URL` (use Redis for multi-worker).  
-- Security headers added by Caddy/Flask: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=no-referrer`, `Permissions-Policy=geolocation=()`.  
+- Security headers added by Caddy/Flask: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=strict-origin-when-cross-origin`, `Permissions-Policy=geolocation=(), microphone=(), camera=()`.  
 - CORS disabled by default; no `Access-Control-Allow-Origin` header unless explicitly added.  
 - Real client IP trusted only when `TRUST_PROXY_HEADERS=true` (behind Caddy). Direct hits on Gunicorn cannot spoof `X-Forwarded-For`.  
 - Audit in SQLite (`audit_log`).  

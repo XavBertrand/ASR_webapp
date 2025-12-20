@@ -25,12 +25,15 @@
         #flash.ok { background: #064e3b; color: #d1fae5; }
         #flash.err { background: #7f1d1d; color: #fecdd3; }
         a { color: #93c5fd; }
+        .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     </style>
 </head>
 <body>
     <header>
         <h1>Administration — Utilisateurs</h1>
         <div class="actions">
+            <a class="ghost-btn" href="/">← Retour app</a>
             <a href="/admin/2fa/setup">2FA admin</a>
             <a href="/admin/audit">Audit</a>
             <form method="post" action="/logout" style="display:inline;">
@@ -47,6 +50,9 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <label for="new-username">Identifiant</label>
                 <input id="new-username" name="username" required>
+
+                <label for="new-email">Email (optionnel)</label>
+                <input id="new-email" name="email" type="email" autocomplete="email">
 
                 <label for="new-role">Rôle</label>
                 <select id="new-role" name="role">
@@ -67,6 +73,8 @@
                 <thead>
                     <tr>
                         <th>Username</th>
+                        <th>Email</th>
+                        <th>Email vérifié</th>
                         <th>Rôle</th>
                         <th>Actif</th>
                         <th>2FA</th>
@@ -97,10 +105,20 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${u.username}</td>
+                    <td>
+                        <input data-field="email" data-id="${u.id}" type="email" value="${u.email || ''}" placeholder="email@domaine.tld">
+                    </td>
+                    <td>
+                        <label style="display:flex; gap:6px; align-items:center;">
+                            <input data-field="email_verified" data-id="${u.id}" type="checkbox" ${u.email_verified ? 'checked' : ''}>
+                            <span>Vérifié</span>
+                        </label>
+                    </td>
                     <td>${u.role}</td>
                     <td><span class="pill ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'actif' : 'inactif'}</span></td>
                     <td>${u.twofa_enabled ? '✅' : '—'}</td>
                     <td class="actions">
+                        <button data-action="save-email" data-id="${u.id}">Enregistrer email</button>
                         <button data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
                         <button data-action="reset" data-id="${u.id}">Reset mot de passe</button>
                     </td>
@@ -116,6 +134,7 @@
                 username: form.username.value,
                 password: form.password.value,
                 role: form.role.value,
+                email: form.email.value,
             };
             const res = await fetch('/api/admin/users', {
                 method: 'POST',
@@ -138,6 +157,29 @@
             if (!btn) return;
             const id = btn.dataset.id;
             const action = btn.dataset.action;
+            if (action === 'save-email') {
+                const row = btn.closest('tr');
+                const emailInput = row.querySelector('input[data-field="email"]');
+                const verifiedCheckbox = row.querySelector('input[data-field="email_verified"]');
+                const payload = {
+                    email: emailInput.value,
+                    email_verified: verifiedCheckbox.checked,
+                };
+                const res = await fetch(`/api/admin/users/${id}/email`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                    body: JSON.stringify(payload),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    flash('Email mis à jour');
+                    fetchUsers();
+                } else {
+                    flash(data.error || 'Erreur', false);
+                }
+                return;
+            }
             if (action === 'toggle') {
                 const res = await fetch(`/api/admin/users/${id}/toggle-active`, {
                     method: 'POST',

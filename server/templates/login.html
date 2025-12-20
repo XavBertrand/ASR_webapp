@@ -13,10 +13,14 @@
         input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
         button { margin-top: 16px; width: 100%; padding: 12px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; }
         .error { background: #1f2937; border: 1px solid #ef4444; color: #fecdd3; padding: 10px 12px; border-radius: 10px; margin-top: 10px; }
+        .info { background: #0f172a; border: 1px solid #1f2937; color: #c7d2fe; padding: 10px 12px; border-radius: 10px; margin-top: 10px; }
         small { color: #9ca3af; }
+        .link { display: inline-block; margin-top: 10px; color: #93c5fd; text-decoration: none; font-size: 0.9rem; }
+        .link:hover { text-decoration: underline; color: #bfdbfe; }
     </style>
 </head>
 <body>
+    {% set show_otp = show_otp|default(false) %}
     <div class="card">
         <h1>Connexion</h1>
         <form method="post" action="/login">
@@ -27,14 +31,22 @@
             <label for="password">Mot de passe</label>
             <input id="password" type="password" name="password" autocomplete="current-password" required>
 
-            <label for="otp">Code OTP (admins avec 2FA)</label>
-            <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+            <div id="otp-block" {% if not show_otp %}style="display:none"{% endif %}>
+                <label for="otp">Code OTP (admins avec 2FA)</label>
+                <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+            </div>
 
             <button type="submit">Se connecter</button>
         </form>
+        <div class="actions">
+            <a class="link" href="/forgot-password">Mot de passe oublié ?</a>
+        </div>
         <div class="hint">
             <small>L’authentification admin exige un mot de passe robuste et, si activé, un OTP ou un code de récupération.</small>
         </div>
+        {% if message %}
+            <div class="info">{{ message }}</div>
+        {% endif %}
         {% if error %}
             <div class="error">{{ error }}</div>
         {% endif %}

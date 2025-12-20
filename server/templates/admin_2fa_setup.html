@@ -20,13 +20,16 @@
         .code { background: #0f1624; border: 1px dashed #1f2937; border-radius: 10px; padding: 8px 10px; font-family: monospace; }
         .muted { color: #9ca3af; font-size: 0.95rem; }
         .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .actions { display: flex; gap: 10px; align-items: center; }
+        .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
     </style>
 </head>
 <body>
     <header>
         <h1>Activation 2FA Admin</h1>
         <div class="actions">
-            <a href="/admin/users" style="color:#93c5fd;">Retour</a>
+            <a class="ghost-btn" href="/">← Retour app</a>
+            <a class="ghost-btn" href="/admin/users">Utilisateurs</a>
         </div>
     </header>
     <main>

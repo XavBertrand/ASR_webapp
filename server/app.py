@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import re
 import secrets
+import smtplib
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
@@ -26,8 +30,9 @@ from flask_limiter import Limiter
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 
-from server.models import AuditLog, RecoveryCode, User, db
+from server.models import AuditLog, PasswordResetToken, RecoveryCode, User, db
 from server.security import (
     decrypt_secret,
     encrypt_secret,
@@ -57,6 +62,7 @@ WEBAPP_ENV = os.environ.get("WEBAPP_ENV", "").lower()
 SESSION_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() != "false"
 REQUIRE_ADMIN_2FA = os.environ.get("REQUIRE_ADMIN_2FA", "false").lower() == "true"
 TOTP_ENC_KEY = os.environ.get("TOTP_ENC_KEY")
+DEFAULT_RESET_TOKEN_TTL_MINUTES = 30
 
 MAX_CONTENT_LENGTH = DEFAULT_MAX_MB * 1024 * 1024
 
@@ -70,6 +76,13 @@ def _parse_env_int(env_name: str) -> int | None:
     except ValueError:
         logger.warning("%s doit être un entier, valeur ignorée: %r", env_name, raw)
         return None
+
+
+def _env_bool(env_name: str, default: bool = False) -> bool:
+    raw = os.environ.get(env_name)
+    if raw is None or raw == "":
+        return default
+    return str(raw).lower() not in {"0", "false", "no", "off"}
 
 
 ENV_UPLOAD_UID = _parse_env_int("UPLOAD_UID")
@@ -148,6 +161,30 @@ def ensure_dirs(app: Flask) -> None:
             os.makedirs(db_path.parent, exist_ok=True)
 
 
+def apply_sqlite_schema_fixes(app: Flask) -> None:
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if not uri.startswith("sqlite"):
+        return
+    engine = db.engine
+
+    def has_column(conn, table: str, column: str) -> bool:
+        res = conn.exec_driver_sql(f"PRAGMA table_info({table})")
+        return any(row[1] == column for row in res)
+
+    with engine.begin() as conn:
+        try:
+            if not has_column(conn, "users", "email"):
+                conn.exec_driver_sql("ALTER TABLE users ADD COLUMN email VARCHAR(255)")
+            if not has_column(conn, "users", "email_verified"):
+                conn.exec_driver_sql("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0")
+                conn.exec_driver_sql("UPDATE users SET email_verified = 0 WHERE email_verified IS NULL")
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email) WHERE email IS NOT NULL"
+            )
+        except Exception as exc:
+            logger.warning("Impossible d'appliquer les migrations SQLite: %s", exc)
+
+
 def require_secret_key(app: Flask) -> None:
     if app.config.get("SECRET_KEY"):
         return
@@ -179,11 +216,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         template_folder=str(BASE_DIR / "templates"),
     )
 
+    reset_ttl = _parse_env_int("RESET_TOKEN_TTL_MINUTES") or DEFAULT_RESET_TOKEN_TTL_MINUTES
+    mail_port = _parse_env_int("MAIL_PORT") or 587
+    mail_use_tls = _env_bool("MAIL_USE_TLS", True)
     app.config.update(
         UPLOAD_FOLDER=DEFAULT_UPLOAD_FOLDER,
         MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
         SQLALCHEMY_DATABASE_URI=DEFAULT_DB_URI,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SECRET_KEY=os.environ.get("SECRET_KEY"),
         SESSION_COOKIE_SECURE=SESSION_SECURE,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE=DEFAULT_SAME_SITE,
@@ -193,6 +234,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         WEBAPP_ENV=webapp_env,
         RATELIMIT_STORAGE_URL=ratelimit_storage,
         RATELIMIT_STORAGE_URI=ratelimit_storage,
+        RESET_TOKEN_TTL_MINUTES=reset_ttl,
+        MAIL_HOST=os.environ.get("MAIL_HOST"),
+        MAIL_PORT=mail_port,
+        MAIL_USERNAME=os.environ.get("MAIL_USERNAME"),
+        MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD"),
+        MAIL_FROM=os.environ.get("MAIL_FROM"),
+        MAIL_USE_TLS=mail_use_tls,
         PERMANENT_SESSION_LIFETIME=timedelta(
             hours=int(os.environ.get("SESSION_LIFETIME_HOURS", "12"))
         ),
@@ -208,7 +256,13 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     db.init_app(app)
     limiter.init_app(app)
-    if app.config["RATELIMIT_STORAGE_URL"] == "memory://" and app.config.get("WEBAPP_ENV") == "production":
+    env_markers = [
+        app.config.get("WEBAPP_ENV") or "",
+        os.environ.get("FLASK_ENV", ""),
+        os.environ.get("APP_ENV", ""),
+    ]
+    env_markers = [e.lower() for e in env_markers if e]
+    if app.config["RATELIMIT_STORAGE_URL"] == "memory://" and ("production" in env_markers or "prod" in env_markers):
         logger.warning("Limiter not shared across workers (memory backend). Configure RATELIMIT_STORAGE_URL=redis://...")
     app.config["TOTP_FERNET"] = make_fernet(TOTP_ENC_KEY)
 
@@ -216,6 +270,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     register_routes(app)
     with app.app_context():
         db.create_all()
+        apply_sqlite_schema_fixes(app)
         if not app.config.get("SKIP_BOOTSTRAP_ADMIN"):
             bootstrap_admin(app)
     return app
@@ -326,7 +381,8 @@ def apply_security_headers(response):
     csp = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data:; "
         "frame-ancestors 'none'"
     )
@@ -336,6 +392,140 @@ def apply_security_headers(response):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     return response
+
+
+def mail_settings(app: Flask) -> dict | None:
+    host = app.config.get("MAIL_HOST")
+    if not host:
+        return None
+    return {
+        "host": host,
+        "port": app.config.get("MAIL_PORT") or 587,
+        "username": app.config.get("MAIL_USERNAME"),
+        "password": app.config.get("MAIL_PASSWORD"),
+        "sender": app.config.get("MAIL_FROM") or app.config.get("MAIL_USERNAME") or "no-reply@example.com",
+        "use_tls": bool(app.config.get("MAIL_USE_TLS")),
+    }
+
+
+def send_password_reset_email(app: Flask, user: User, reset_url: str) -> str:
+    cfg = mail_settings(app)
+    if not cfg:
+        logger.warning("PASSWORD RESET LINK for %s: %s", user.username, reset_url)
+        return "log"
+    if not user.email:
+        logger.warning("PASSWORD RESET LINK (no email) for %s: %s", user.username, reset_url)
+        return "no_email"
+    msg = EmailMessage()
+    msg["Subject"] = "ASR WebApp - Réinitialisation du mot de passe"
+    msg["From"] = cfg["sender"]
+    msg["To"] = user.email
+    msg.set_content(
+        f"Bonjour {user.username},\n\n"
+        "Un lien de réinitialisation de mot de passe a été demandé pour votre compte.\n"
+        f"Si vous êtes à l'origine de cette demande, utilisez ce lien (valide pour une durée limitée) : {reset_url}\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message."
+    )
+    try:
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=10) as smtp:
+            if cfg["use_tls"]:
+                smtp.starttls()
+            if cfg["username"]:
+                smtp.login(cfg["username"], cfg.get("password") or "")
+            smtp.send_message(msg)
+        return "smtp"
+    except Exception as exc:
+        logger.error("Echec envoi email reset pour %s: %s", user.username, exc)
+        logger.warning("PASSWORD RESET LINK for %s: %s", user.username, reset_url)
+        return "error"
+
+
+def hash_reset_token(raw_token: str) -> str:
+    digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    return digest
+
+
+def generate_password_reset_token(user: User, ip: str | None, ua: str | None, ttl_minutes: int) -> tuple[str, PasswordResetToken]:
+    ttl = max(int(ttl_minutes), 1)
+    expires_at = datetime.utcnow() + timedelta(minutes=ttl)
+    attempt = 0
+    while attempt < 3:
+        attempt += 1
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hash_reset_token(raw_token)
+        record = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            request_ip=ip,
+            request_user_agent=(ua[:250] if ua else None),
+        )
+        db.session.add(record)
+        try:
+            db.session.commit()
+            return raw_token, record
+        except IntegrityError:
+            db.session.rollback()
+    raise RuntimeError("Impossible de générer un jeton de réinitialisation unique")
+
+
+def find_valid_reset_token(raw_token: str) -> PasswordResetToken | None:
+    if not raw_token:
+        return None
+    token_hash = hash_reset_token(raw_token)
+    now = datetime.utcnow()
+    token = (
+        PasswordResetToken.query.filter_by(token_hash=token_hash, used_at=None)
+        .filter(PasswordResetToken.expires_at > now)
+        .first()
+    )
+    if not token:
+        return None
+    if not secrets.compare_digest(token_hash, token.token_hash):
+        return None
+    return token
+
+
+def invalidate_user_tokens(user_id: int) -> None:
+    now = datetime.utcnow()
+    PasswordResetToken.query.filter(
+        PasswordResetToken.user_id == user_id, PasswordResetToken.used_at.is_(None)
+    ).update({"used_at": now})
+    db.session.commit()
+
+
+def validate_new_password(password: str, role: str) -> str | None:
+    if role == "admin" and len(password) < 12:
+        return "Le mot de passe admin doit contenir au moins 12 caractères"
+    if len(password) < 8:
+        return "Le mot de passe doit contenir au moins 8 caractères"
+    return None
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalize_email(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    cleaned = raw.strip().lower()
+    return cleaned or None
+
+
+def mask_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    try:
+        local, domain = email.split("@", 1)
+    except ValueError:
+        return "***"
+    local_mask = (local[0] + "***") if local else "***"
+    domain_parts = domain.split(".")
+    if len(domain_parts) >= 2:
+        domain_mask = "***." + domain_parts[-1]
+    else:
+        domain_mask = "***"
+    return f"{local_mask}@{domain_mask}"
 
 
 def login_required(fn: Callable) -> Callable:
@@ -415,7 +605,16 @@ def register_routes(app: Flask) -> None:
         message = "Trop de requêtes, réessayez plus tard."
         if wants_json_response():
             return json_error(message, 429)
-        return render_template("login.html", error=message, csrf_token=g.csrf_token), 429
+        csrf = getattr(g, "csrf_token", None) or session.get("csrf_token") or make_csrf_token()
+        template = "login.html"
+        context = {"error": message, "csrf_token": csrf, "show_otp": False}
+        if request.path.startswith("/forgot-password"):
+            template = "forgot_password.html"
+            context = {"error": message, "csrf_token": csrf}
+        elif request.path.startswith("/reset-password"):
+            template = "reset_password.html"
+            context = {"error": message, "csrf_token": csrf, "invalid": False}
+        return render_template(template, **context), 429
 
     @app.get("/health")
     def health():
@@ -425,7 +624,10 @@ def register_routes(app: Flask) -> None:
     def login():
         if getattr(g, "current_user", None):
             return redirect(url_for("home"))
-        return render_template("login.html", csrf_token=g.csrf_token)
+        message = None
+        if request.args.get("reset") == "1":
+            message = "Mot de passe mis à jour. Vous pouvez vous connecter."
+        return render_template("login.html", csrf_token=g.csrf_token, show_otp=False, message=message)
 
     @app.post("/login")
     @limiter.limit("5/minute;20/hour")
@@ -433,10 +635,10 @@ def register_routes(app: Flask) -> None:
         data = request.form if request.form else request.get_json(silent=True) or {}
         as_form = bool(request.form)
 
-        def login_error(msg: str, status: int):
+        def login_error(msg: str, status: int, *, show_otp: bool = False):
             if wants_json_response() or not as_form:
                 return json_error(msg, status)
-            return render_template("login.html", error=msg, csrf_token=g.csrf_token), status
+            return render_template("login.html", error=msg, csrf_token=g.csrf_token, show_otp=show_otp), status
 
         username = (data.get("username") or "").strip()
         password = data.get("password") or ""
@@ -483,7 +685,7 @@ def register_routes(app: Flask) -> None:
                         )
                 if not otp_validated:
                     log_action(action="login_failed", actor=user, metadata={"reason": "otp_required"}, ip=ip, user_agent=ua)
-                    return login_error("OTP requis ou invalide", 401)
+                    return login_error("OTP requis ou invalide", 401, show_otp=True)
 
         if needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
@@ -497,6 +699,123 @@ def register_routes(app: Flask) -> None:
         if wants_json_response():
             return jsonify({"ok": True, "next": url_for("home")})
         return redirect(url_for("home"))
+
+    @app.get("/forgot-password")
+    def forgot_password_form():
+        if getattr(g, "current_user", None):
+            return redirect(url_for("home"))
+        return render_template("forgot_password.html", csrf_token=g.csrf_token)
+
+    @app.post("/forgot-password")
+    @limiter.limit("5/minute;20/hour")
+    def forgot_password():
+        data = request.form if request.form else request.get_json(silent=True) or {}
+        as_form = bool(request.form)
+        identifier = (data.get("identifier") or "").strip()
+        ip = client_ip()
+        ua = request.headers.get("User-Agent")
+        user = None
+        if identifier:
+            normalized_email = identifier.lower()
+            user = User.query.filter(or_(User.username == identifier, User.email == normalized_email)).first()
+
+        delivery = None
+        if user and user.is_active:
+            try:
+                raw_token, _ = generate_password_reset_token(
+                    user, ip, ua, app.config.get("RESET_TOKEN_TTL_MINUTES", DEFAULT_RESET_TOKEN_TTL_MINUTES)
+                )
+                reset_url = url_for("reset_password_form", token=raw_token, _external=True)
+                delivery = send_password_reset_email(app, user, reset_url)
+            except Exception as exc:
+                logger.error("Erreur lors de la génération ou de l'envoi du lien de réinitialisation: %s", exc)
+                delivery = "error"
+
+        metadata = {"found": bool(user and user.is_active)}
+        if user and user.is_active and delivery:
+            metadata["delivery"] = delivery
+        log_action(
+            action="password_reset_requested",
+            actor=None,
+            target=user if (user and user.is_active) else None,
+            metadata=metadata,
+            ip=ip,
+            user_agent=ua,
+        )
+
+        message = "Si un compte correspond, un lien de réinitialisation a été envoyé."
+        if wants_json_response() or not as_form:
+            return jsonify({"ok": True, "message": message})
+        return render_template("forgot_password.html", csrf_token=g.csrf_token, message=message)
+
+    @app.get("/reset-password/<token>")
+    def reset_password_form(token: str):
+        token_row = find_valid_reset_token(token)
+        if not token_row or not token_row.user or not token_row.user.is_active:
+            return render_template("reset_password.html", invalid=True, csrf_token=g.csrf_token), 400
+        return render_template("reset_password.html", csrf_token=g.csrf_token, invalid=False, token=token)
+
+    @app.post("/reset-password/<token>")
+    @limiter.limit("5/minute")
+    def reset_password_submit(token: str):
+        data = request.form if request.form else request.get_json(silent=True) or {}
+        as_form = bool(request.form)
+        ip = client_ip()
+        ua = request.headers.get("User-Agent")
+        token_row = find_valid_reset_token(token)
+
+        def reset_error(msg: str, status: int = 400, *, invalid: bool = False):
+            if wants_json_response() or not as_form:
+                return json_error(msg, status)
+            return render_template(
+                "reset_password.html", csrf_token=g.csrf_token, error=msg, invalid=invalid, token=token
+            ), status
+
+        if not token_row or not token_row.user or not token_row.user.is_active:
+            existing = PasswordResetToken.query.filter_by(token_hash=hash_reset_token(token)).first() if token else None
+            reason = "invalid_or_expired"
+            target_user = None
+            if existing:
+                target_user = existing.user
+                if existing.used_at:
+                    reason = "used"
+                elif existing.expires_at and existing.expires_at <= datetime.utcnow():
+                    reason = "expired"
+            log_action(
+                action="password_reset_invalid_token",
+                actor=None,
+                target=target_user,
+                metadata={
+                    "reason": reason,
+                    "token_id": existing.id if existing else None,
+                    "token_suffix": token[-4:] if token else None,
+                },
+                ip=ip,
+                user_agent=ua,
+            )
+            return reset_error("Lien invalide ou expiré", 400, invalid=True)
+
+        password = data.get("password") or data.get("new_password") or ""
+        confirm = data.get("confirm_password") or data.get("confirm") or ""
+        error_msg = validate_new_password(password, token_row.user.role)
+        if error_msg:
+            return reset_error(error_msg, 400)
+        if password != confirm:
+            return reset_error("La confirmation ne correspond pas", 400)
+
+        token_row.user.password_hash = hash_password(password)
+        invalidate_user_tokens(token_row.user_id)
+        log_action(
+            action="password_reset_success",
+            actor=None,
+            target=token_row.user,
+            metadata={"token_id": token_row.id},
+            ip=ip,
+            user_agent=ua,
+        )
+        if wants_json_response() or not as_form:
+            return jsonify({"ok": True, "next": url_for("login")})
+        return redirect(url_for("login", reset="1"))
 
     @app.post("/logout")
     @login_required
@@ -584,9 +903,11 @@ def register_routes(app: Flask) -> None:
                 {
                     "id": u.id,
                     "username": u.username,
+                    "email": u.email,
                     "role": u.role,
                     "is_active": u.is_active,
                     "twofa_enabled": u.twofa_enabled,
+                    "email_verified": u.email_verified,
                     "created_at": u.created_at.isoformat() + "Z",
                     "updated_at": u.updated_at.isoformat() + "Z" if u.updated_at else None,
                 }
@@ -616,17 +937,20 @@ def register_routes(app: Flask) -> None:
         username = (data.get("username") or "").strip()
         password = data.get("password") or ""
         role = (data.get("role") or "user").strip()
+        email = (data.get("email") or "").strip() or None
+        if email:
+            email = email.lower()
         if role not in {"admin", "user"}:
             return json_error("Role invalide", 400)
         if (role == "admin" and len(password) < 12) or len(password) < 8:
             return json_error("Mot de passe trop court", 400)
-        user = User(username=username, password_hash=hash_password(password), role=role, is_active=True)
+        user = User(username=username, email=email, password_hash=hash_password(password), role=role, is_active=True)
         db.session.add(user)
         try:
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-            return json_error("Nom d'utilisateur déjà utilisé", 400)
+            return json_error("Nom d'utilisateur ou email déjà utilisé", 400)
         log_action(
             action="create_user",
             actor=g.current_user,
@@ -636,6 +960,52 @@ def register_routes(app: Flask) -> None:
             user_agent=request.headers.get("User-Agent"),
         )
         return jsonify({"ok": True, "id": user.id})
+
+    @app.post("/api/admin/users/<int:user_id>/email")
+    @admin_required
+    @limiter.limit("20/hour")
+    def update_user_email(user_id: int):
+        data = request.get_json() or request.form
+        raw_email = data.get("email")
+        email_verified_raw = data.get("email_verified")
+        user = User.query.get_or_404(user_id)
+        new_email = normalize_email(raw_email)
+        if new_email and len(new_email) > 255:
+            return json_error("Email trop long", 400)
+        if new_email and not EMAIL_RE.match(new_email):
+            return json_error("Format d'email invalide", 400)
+        # bool parsing
+        if email_verified_raw is None:
+            email_verified = user.email_verified if new_email == user.email else False
+        else:
+            email_verified = str(email_verified_raw).lower() in {"1", "true", "yes", "on"}
+        if new_email:
+            existing = User.query.filter(User.email == new_email, User.id != user.id).first()
+            if existing:
+                return json_error("Email déjà utilisé", 400)
+        old_email = user.email
+        email_changed = new_email != old_email
+        user.email = new_email
+        user.email_verified = email_verified
+        if email_changed:
+            invalidate_user_tokens(user.id)
+        else:
+            db.session.commit()
+        log_action(
+            action="admin_user_email_updated",
+            actor=g.current_user,
+            target=user,
+            metadata={
+                "user_id": user.id,
+                "old_email": mask_email(old_email),
+                "new_email": mask_email(new_email),
+                "email_verified": email_verified,
+                "changed_by_admin_id": g.current_user.id if g.current_user else None,
+            },
+            ip=client_ip(),
+            user_agent=request.headers.get("User-Agent"),
+        )
+        return jsonify({"ok": True})
 
     @app.post("/api/admin/users/<int:user_id>/reset-password")
     @admin_required

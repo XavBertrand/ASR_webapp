@@ -11,6 +11,8 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, index=True, nullable=True)
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(10), nullable=False)  # "admin" or "user"
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -22,6 +24,7 @@ class User(db.Model):
     last_login_at = db.Column(db.DateTime)
 
     recovery_codes = db.relationship("RecoveryCode", back_populates="user", cascade="all, delete-orphan")
+    reset_tokens = db.relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class RecoveryCode(db.Model):
@@ -48,3 +51,18 @@ class AuditLog(db.Model):
     ip = db.Column(db.String(64))
     user_agent = db.Column(db.String(256))
     metadata_json = db.Column(db.Text)
+
+
+class PasswordResetToken(db.Model):
+    __tablename__ = "password_reset_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = db.Column(db.String(128), nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime)
+    request_ip = db.Column(db.String(64))
+    request_user_agent = db.Column(db.String(256))
+
+    user = db.relationship("User", back_populates="reset_tokens")

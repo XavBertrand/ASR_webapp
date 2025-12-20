@@ -71,6 +71,8 @@
 
         .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
         .admin-link { display: none; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--primary); color: var(--primary); text-decoration: none; font-weight: 700; background: rgba(59,130,246,0.12); }
+        .logout-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--stroke); background: #111827; color: var(--text-main); font-weight: 700; cursor: pointer; }
+        .logout-btn i { font-size: 20px; }
 
         .tabbar {
             border-top: 1px solid var(--stroke);
@@ -360,6 +362,10 @@
             </div>
             <div class="header-actions">
                 <a id="admin-link" class="admin-link" href="/admin/users">Administration</a>
+                <button class="logout-btn" id="logoutBtn" title="Déconnexion">
+                    <i class="material-icons">logout</i>
+                    <span>Déconnexion</span>
+                </button>
                 <div class="lang">FR</div>
             </div>
         </header>
@@ -1380,9 +1386,31 @@
             }
         }
 
+        function readCsrfCookie() {
+            const match = document.cookie.match(/(?:^|;\\s*)csrf_token=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        async function handleLogout() {
+            const csrf = readCsrfCookie();
+            try {
+                await fetch('/logout', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': csrf },
+                    credentials: 'same-origin'
+                });
+            } catch (err) {
+                console.warn('Logout request failed', err);
+            } finally {
+                window.location.href = '/login';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             setupAdminLink();
             new RecorderApp();
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
         });
 
         if ('serviceWorker' in navigator) {

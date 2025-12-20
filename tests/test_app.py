@@ -1,15 +1,17 @@
 import io
 import json
+import logging
 import re
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pyotp
 import pytest
 
-from server.app import client_ip, create_app
-from server.models import AuditLog, RecoveryCode, User, db
-from server.security import hash_password
+from server.app import client_ip, create_app, hash_reset_token
+from server.models import AuditLog, PasswordResetToken, RecoveryCode, User, db
+from server.security import hash_password, verify_password
 
 
 def build_app(tmp_path, monkeypatch, *, extra_env: dict | None = None, config: dict | None = None):
@@ -56,6 +58,30 @@ def login(client, username, password, otp=None):
     if otp:
         payload["otp"] = otp
     return client.post("/login", data=payload, follow_redirects=False)
+
+
+def forgot_password(client, identifier):
+    csrf = set_csrf(client)
+    return client.post("/forgot-password", data={"identifier": identifier, "csrf_token": csrf})
+
+
+def extract_token_from_logs(caplog):
+    for record in caplog.records:
+        if "PASSWORD RESET LINK" in record.message:
+            match = re.search(r"/reset-password/([A-Za-z0-9_\-]+)", record.message)
+            if match:
+                return match.group(1)
+    return None
+
+
+def admin_update_email(client, user_id, email, verified=False):
+    with client.session_transaction() as sess:
+        csrf = sess.get("csrf_token") or set_csrf(client)
+    return client.post(
+        f"/api/admin/users/{user_id}/email",
+        json={"email": email, "email_verified": verified},
+        headers={"X-CSRF-Token": csrf},
+    )
 
 
 def test_bootstrap_admin_created(app):
@@ -312,11 +338,279 @@ def test_ratelimit_storage_env(monkeypatch, tmp_path):
 
 def test_security_headers_present(client):
     resp = client.get("/login")
-    assert resp.headers.get("Content-Security-Policy")
+    csp = resp.headers.get("Content-Security-Policy")
+    assert csp and "default-src 'self'" in csp and "frame-ancestors 'none'" in csp
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
-    assert resp.headers.get("Referrer-Policy") == "no-referrer"
-    assert resp.headers.get("Permissions-Policy") == "geolocation=()"
+    assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+
+
+def test_forgot_password_unknown_identifier_no_token(client, app):
+    resp = forgot_password(client, "nobody")
+    assert resp.status_code == 200
+    with app.app_context():
+        assert PasswordResetToken.query.count() == 0
+
+
+def test_forgot_password_creates_token_and_audit(client, app, caplog):
+    with app.app_context():
+        user = User(
+            username="alice",
+            email="alice@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    with caplog.at_level(logging.WARNING):
+        resp = forgot_password(client, "alice@example.com")
+    assert resp.status_code == 200
+    raw_token = extract_token_from_logs(caplog)
+    assert raw_token
+    with app.app_context():
+        tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
+        assert len(tokens) == 1
+        assert AuditLog.query.filter_by(action="password_reset_requested", target_user_id=user_id).count() >= 1
+
+
+def test_reset_token_single_use(client, app, caplog):
+    with app.app_context():
+        user = User(
+            username="bob",
+            email="bob@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    with caplog.at_level(logging.WARNING):
+        forgot_password(client, "bob@example.com")
+    token = extract_token_from_logs(caplog)
+    assert token
+    resp_get = client.get(f"/reset-password/{token}")
+    assert resp_get.status_code == 200
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    first = client.post(
+        f"/reset-password/{token}",
+        data={"password": "NewPassword123", "confirm_password": "NewPassword123", "csrf_token": csrf},
+    )
+    assert first.status_code in (200, 302)
+    with client.session_transaction() as sess:
+        csrf2 = sess.get("csrf_token") or set_csrf(client)
+    second = client.post(
+        f"/reset-password/{token}",
+        data={"password": "AnotherPass123", "confirm_password": "AnotherPass123", "csrf_token": csrf2},
+    )
+    assert second.status_code == 400
+    with app.app_context():
+        tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
+        assert tokens and all(t.used_at is not None for t in tokens)
+        user = User.query.get(user_id)
+        assert verify_password(user.password_hash, "NewPassword123")
+
+
+def test_reset_token_expired(client, app):
+    with app.app_context():
+        user = User(
+            username="carol",
+            email="carol@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        raw = "expired-" + secrets.token_urlsafe(8)
+        token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw),
+            expires_at=datetime.utcnow() - timedelta(minutes=1),
+        )
+        db.session.add(token)
+        db.session.commit()
+    resp_get = client.get(f"/reset-password/{raw}")
+    assert resp_get.status_code == 400
+    with client.session_transaction() as sess:
+        csrf = sess.get("csrf_token") or set_csrf(client)
+    resp_post = client.post(
+        f"/reset-password/{raw}",
+        data={"password": "AnotherPass123", "confirm_password": "AnotherPass123", "csrf_token": csrf},
+    )
+    assert resp_post.status_code == 400
+    with app.app_context():
+        token_db = PasswordResetToken.query.first()
+        assert token_db and token_db.used_at is None
+
+
+def test_password_policy_enforced_for_admin_reset(client, app):
+    with app.app_context():
+        user = User(
+            username="david",
+            email="david@example.com",
+            password_hash=hash_password("Password123"),
+            role="admin",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        raw = "adm-" + secrets.token_urlsafe(8)
+        token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(token)
+        db.session.commit()
+    client.get(f"/reset-password/{raw}")
+    with client.session_transaction() as sess:
+        csrf = sess.get("csrf_token") or set_csrf(client)
+    resp = client.post(
+        f"/reset-password/{raw}",
+        data={"password": "short", "confirm_password": "short", "csrf_token": csrf},
+    )
+    assert resp.status_code == 400
+    with app.app_context():
+        token_db = PasswordResetToken.query.first()
+        assert token_db.used_at is None
+        user = User.query.filter_by(username="david").first()
+        assert verify_password(user.password_hash, "Password123")
+
+
+def test_inactive_user_does_not_get_token(client, app):
+    with app.app_context():
+        user = User(
+            username="eve",
+            email="eve@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=False,
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    resp = forgot_password(client, "eve@example.com")
+    assert resp.status_code == 200
+    with app.app_context():
+        assert PasswordResetToken.query.filter_by(user_id=user_id).count() == 0
+
+
+def test_reset_invalidates_other_tokens(client, app):
+    with app.app_context():
+        user = User(
+            username="frank",
+            email="frank@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        raw1 = "tok-" + secrets.token_urlsafe(6)
+        raw2 = "tok-" + secrets.token_urlsafe(6)
+        t1 = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw1),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        )
+        t2 = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw2),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        )
+        db.session.add_all([t1, t2])
+        db.session.commit()
+        user_id = user.id
+    resp_get = client.get(f"/reset-password/{raw1}")
+    assert resp_get.status_code == 200
+    with client.session_transaction() as sess:
+        csrf = sess.get("csrf_token") or set_csrf(client)
+    resp_post = client.post(
+        f"/reset-password/{raw1}",
+        data={"password": "ResetAll123", "confirm_password": "ResetAll123", "csrf_token": csrf},
+    )
+    assert resp_post.status_code in (200, 302)
+    with app.app_context():
+        tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
+        assert len(tokens) == 2
+        assert all(t.used_at is not None for t in tokens)
+
+
+def test_admin_can_set_and_clear_email(client, app):
+    login(client, "admin", "SuperSecureAdmin!")
+    with app.app_context():
+        user = User(username="target", password_hash=hash_password("Password123"), role="user", is_active=True)
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    res = admin_update_email(client, user_id, "NewEmail@Example.com", verified=True)
+    assert res.status_code == 200
+    with app.app_context():
+        refreshed = User.query.get(user_id)
+        assert refreshed.email == "newemail@example.com"
+        assert refreshed.email_verified is True
+        audit = AuditLog.query.filter_by(action="admin_user_email_updated", target_user_id=user_id).order_by(
+            AuditLog.id.desc()
+        ).first()
+        assert audit and "***" in (audit.metadata_json or "")
+    res_clear = admin_update_email(client, user_id, "", verified=False)
+    assert res_clear.status_code == 200
+    with app.app_context():
+        refreshed = User.query.get(user_id)
+        assert refreshed.email is None
+        assert refreshed.email_verified is False
+
+
+def test_non_admin_cannot_update_email(client, app):
+    with app.app_context():
+        user = User(username="simple", password_hash=hash_password("Password123"), role="user", is_active=True)
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    login(client, "admin", "SuperSecureAdmin!")
+    client.post("/logout", data={"csrf_token": set_csrf(client)})
+    login(client, "simple", "Password123")
+    resp = admin_update_email(client, user_id, "hack@example.com")
+    assert resp.status_code == 403
+
+
+def test_duplicate_email_rejected(client, app):
+    login(client, "admin", "SuperSecureAdmin!")
+    with app.app_context():
+        u1 = User(username="u1", email="dup@example.com", password_hash=hash_password("Password123"), role="user", is_active=True)
+        u2 = User(username="u2", email="other@example.com", password_hash=hash_password("Password123"), role="user", is_active=True)
+        db.session.add_all([u1, u2])
+        db.session.commit()
+        user2_id = u2.id
+    resp = admin_update_email(client, user2_id, "dup@example.com")
+    assert resp.status_code == 400
+
+
+def test_email_change_invalidates_reset_tokens(client, app):
+    login(client, "admin", "SuperSecureAdmin!")
+    with app.app_context():
+        user = User(username="victim", email="victim@example.com", password_hash=hash_password("Password123"), role="user", is_active=True)
+        db.session.add(user)
+        db.session.commit()
+        raw = "raw-" + secrets.token_urlsafe(6)
+        token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(token)
+        db.session.commit()
+        user_id = user.id
+    resp = admin_update_email(client, user_id, "victim2@example.com")
+    assert resp.status_code == 200
+    with app.app_context():
+        tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
+        assert tokens and all(t.used_at is not None for t in tokens)
 
 
 def test_no_cors_header_on_login(client):
@@ -328,3 +622,4 @@ def test_gunicorn_default_host_loopback():
     entrypoint = Path(__file__).resolve().parent.parent / "docker" / "entrypoint.sh"
     content = entrypoint.read_text()
     assert 'GUNICORN_HOST="${GUNICORN_HOST:-127.0.0.1}"' in content
+    assert "GUNICORN_BIND_LOCAL_ONLY" in content
