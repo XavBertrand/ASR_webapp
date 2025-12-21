@@ -6,14 +6,18 @@ on:
       - develop
       - master
       - main
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
-  group: docker-pr-${{ github.event_name == 'pull_request' && github.event.pull_request.number || format('manual-{0}', github.run_id) }}
+  group: docker-pr-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && format('tag-{0}', github.ref_name) || format('manual-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: xbmtb82/asr_webapp
+  IMAGE_REPO: xbmtb82/asr_webapp
+  IMAGE_REPO_DEV: xbmtb82/asr_webapp-dev
 
 jobs:
   build:
@@ -43,14 +47,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Select image repo (dev for PR, prod for tags)
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "IMAGE_NAME=${{ env.IMAGE_REPO_DEV }}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_NAME=${{ env.IMAGE_REPO }}" >> $GITHUB_ENV
+          fi
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=pr,prefix=pr-
-            type=sha,format=short,prefix=${{ github.event_name == 'pull_request' && format('pr-{0}-', github.event.pull_request.number) || 'manual-' }}
+            # PR => images "dev"
+            type=ref,event=pr,prefix=dev-pr-
+            type=sha,event=pr,format=short,prefix=dev-
+            # Tag git vX.Y.Z => tag docker X.Y.Z
+            type=semver,event=tag,pattern={{version}}
+            # Tag docker "latest" uniquement pour les releases
+            type=raw,value=latest,event=tag
           labels: |
             org.opencontainers.image.title=asr_webapp
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
