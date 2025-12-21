@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Administration - Utilisateurs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
+        h1 { margin: 0; font-size: 1.2rem; }
+        main { padding: 16px 20px; display: grid; gap: 16px; max-width: 1000px; margin: 0 auto; }
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
+        label { display: block; margin-top: 10px; font-weight: 600; }
+        input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
+        button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px; border-bottom: 1px solid #1f2937; text-align: left; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .pill { padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; background: #1f2937; }
+        .pill.active { background: #065f46; color: #d1fae5; }
+        .pill.inactive { background: #7f1d1d; color: #fecdd3; }
+        #flash { display: none; padding: 10px 12px; border-radius: 10px; }
+        #flash.show { display: block; }
+        #flash.ok { background: #064e3b; color: #d1fae5; }
+        #flash.err { background: #7f1d1d; color: #fecdd3; }
+        a { color: #93c5fd; }
+        .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Administration — Utilisateurs</h1>
+        <div class="actions">
+            <a class="ghost-btn" href="/">← Retour app</a>
+            <a href="/admin/2fa/setup">2FA admin</a>
+            <a href="/admin/audit">Audit</a>
+            <form method="post" action="/logout" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit">Déconnexion</button>
+            </form>
+        </div>
+    </header>
+    <main>
+        <div id="flash"></div>
+        <section class="card">
+            <h2>Créer un utilisateur</h2>
+            <form id="create-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label for="new-username">Identifiant</label>
+                <input id="new-username" name="username" required>
+
+                <label for="new-email">Email (optionnel)</label>
+                <input id="new-email" name="email" type="email" autocomplete="email">
+
+                <label for="new-role">Rôle</label>
+                <select id="new-role" name="role">
+                    <option value="user">user</option>
+                    <option value="admin">admin</option>
+                </select>
+
+                <label for="new-password">Mot de passe initial</label>
+                <input id="new-password" name="password" type="password" required minlength="8">
+
+                <button type="submit">Créer</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Utilisateurs</h2>
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Email vérifié</th>
+                        <th>Rôle</th>
+                        <th>Actif</th>
+                        <th>2FA</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        const csrfToken = "{{ csrf_token }}";
+
+        function flash(msg, ok = true) {
+            const el = document.getElementById('flash');
+            el.textContent = msg;
+            el.className = ok ? 'ok show' : 'err show';
+            setTimeout(() => el.classList.remove('show'), 4000);
+        }
+
+        async function fetchUsers() {
+            const res = await fetch('/api/admin/users', {credentials: 'same-origin'});
+            const data = await res.json();
+            const tbody = document.querySelector('#users-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.username}</td>
+                    <td>
+                        <input data-field="email" data-id="${u.id}" type="email" value="${u.email || ''}" placeholder="email@domaine.tld">
+                    </td>
+                    <td>
+                        <label style="display:flex; gap:6px; align-items:center;">
+                            <input data-field="email_verified" data-id="${u.id}" type="checkbox" ${u.email_verified ? 'checked' : ''}>
+                            <span>Vérifié</span>
+                        </label>
+                    </td>
+                    <td>${u.role}</td>
+                    <td><span class="pill ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'actif' : 'inactif'}</span></td>
+                    <td>${u.twofa_enabled ? '✅' : '—'}</td>
+                    <td class="actions">
+                        <button data-action="save-email" data-id="${u.id}">Enregistrer email</button>
+                        <button data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
+                        <button data-action="reset" data-id="${u.id}">Reset mot de passe</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const payload = {
+                username: form.username.value,
+                password: form.password.value,
+                role: form.role.value,
+                email: form.email.value,
+            };
+            const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                flash('Utilisateur créé');
+                form.reset();
+                fetchUsers();
+            } else {
+                flash(data.error || 'Erreur', false);
+            }
+        });
+
+        document.querySelector('#users-table').addEventListener('click', async (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            const action = btn.dataset.action;
+            if (action === 'save-email') {
+                const row = btn.closest('tr');
+                const emailInput = row.querySelector('input[data-field="email"]');
+                const verifiedCheckbox = row.querySelector('input[data-field="email_verified"]');
+                const payload = {
+                    email: emailInput.value,
+                    email_verified: verifiedCheckbox.checked,
+                };
+                const res = await fetch(`/api/admin/users/${id}/email`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                    body: JSON.stringify(payload),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    flash('Email mis à jour');
+                    fetchUsers();
+                } else {
+                    flash(data.error || 'Erreur', false);
+                }
+                return;
+            }
+            if (action === 'toggle') {
+                const res = await fetch(`/api/admin/users/${id}/toggle-active`, {
+                    method: 'POST',
+                    headers: {'X-CSRF-Token': csrfToken},
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    flash(data.is_active ? 'Compte activé' : 'Compte désactivé');
+                    fetchUsers();
+                } else {
+                    flash(data.error || 'Erreur', false);
+                }
+            }
+            if (action === 'reset') {
+                const pwd = prompt('Nouveau mot de passe:');
+                if (!pwd) return;
+                const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+                    body: JSON.stringify({password: pwd}),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    flash('Mot de passe réinitialisé');
+                } else {
+                    flash(data.error || 'Erreur', false);
+                }
+            }
+        });
+
+        fetchUsers();
+    </script>
+</body>
+</html>

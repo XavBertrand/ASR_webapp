@@ -39,30 +39,35 @@ log "Uploads seront créés avec UID:GID ${UPLOAD_UID}:${UPLOAD_GID}"
 
 CADDY_DOMAIN="${CADDY_DOMAIN:-localhost}"
 CADDY_EMAIL="${CADDY_EMAIL:-}"
-GUNICORN_HOST="${GUNICORN_HOST:-0.0.0.0}"
+WEBAPP_ENV="${WEBAPP_ENV:-}"
+DEFAULT_BIND_LOCAL_ONLY="false"
+if [[ "${WEBAPP_ENV}" == "production" || "${WEBAPP_ENV}" == "prod" ]]; then
+    DEFAULT_BIND_LOCAL_ONLY="true"
+fi
+GUNICORN_BIND_LOCAL_ONLY="${GUNICORN_BIND_LOCAL_ONLY:-${DEFAULT_BIND_LOCAL_ONLY}}"
+GUNICORN_HOST="${GUNICORN_HOST:-127.0.0.1}"
 GUNICORN_PORT="${GUNICORN_PORT:-8000}"
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 GUNICORN_THREADS="${GUNICORN_THREADS:-4}"
 GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-300}"
-
-BASIC_AUTH_USER="${BASIC_AUTH_USER:-xavier}"
-BASIC_AUTH_PASSWORD_HASH="${BASIC_AUTH_PASSWORD_HASH:-}"
-if [[ -z "${BASIC_AUTH_PASSWORD_HASH}" ]]; then
-    BASIC_AUTH_PASSWORD="${BASIC_AUTH_PASSWORD:-MyPassword}"
-    if [[ "${BASIC_AUTH_PASSWORD}" == "MyPassword" ]]; then
-        log "WARNING: BASIC_AUTH_PASSWORD not provided, using default 'MyPassword'."
+if [[ "${GUNICORN_BIND_LOCAL_ONLY}" == "true" ]]; then
+    GUNICORN_HOST="127.0.0.1"
+fi
+if [[ "${GUNICORN_HOST}" == "0.0.0.0" ]]; then
+    log "WARNING: GUNICORN_HOST=0.0.0.0 — Gunicorn exposé directement (bypass Caddy)."
+    if [[ "${WEBAPP_ENV}" == "production" || "${WEBAPP_ENV}" == "prod" ]]; then
+        log "WARNING: environnement production détecté avec bind 0.0.0.0 (non recommandé)."
     fi
-    BASIC_AUTH_PASSWORD_HASH="$(caddy hash-password --plaintext "${BASIC_AUTH_PASSWORD}")"
 fi
 
-auth_lines=$'        '"${BASIC_AUTH_USER} ${BASIC_AUTH_PASSWORD_HASH}"
-if [[ -n "${BASIC_AUTH_EXTRA_USERS:-}" ]]; then
-    IFS=';' read -ra extra_users <<< "${BASIC_AUTH_EXTRA_USERS}"
-    for pair in "${extra_users[@]}"; do
-        pair="$(echo "${pair}" | xargs || true)"
-        [[ -z "${pair}" ]] && continue
-        auth_lines+=$'\n        '"${pair}"
-    done
+GATEWAY_BASICAUTH_USER="${GATEWAY_BASICAUTH_USER:-}"
+GATEWAY_BASICAUTH_HASHED_PASSWORD="${GATEWAY_BASICAUTH_HASHED_PASSWORD:-}"
+if [[ -n "${GATEWAY_BASICAUTH_USER}" && -z "${GATEWAY_BASICAUTH_HASHED_PASSWORD}" && -n "${GATEWAY_BASICAUTH_PASSWORD:-}" ]]; then
+    GATEWAY_BASICAUTH_HASHED_PASSWORD="$(caddy hash-password --plaintext "${GATEWAY_BASICAUTH_PASSWORD}")"
+fi
+if [[ -n "${GATEWAY_BASICAUTH_USER}" && -z "${GATEWAY_BASICAUTH_HASHED_PASSWORD}" ]]; then
+    log "INFO: GATEWAY_BASICAUTH_USER fourni sans mot de passe hashé — BasicAuth désactivé."
+    GATEWAY_BASICAUTH_USER=""
 fi
 
 log "Using Caddy domain ${CADDY_DOMAIN}"
@@ -74,19 +79,29 @@ log "Using Caddy domain ${CADDY_DOMAIN}"
     printf '}\n\n'
     printf '%s {\n' "${CADDY_DOMAIN}"
     printf '    encode zstd gzip\n\n'
-    printf '    basic_auth {\n%b\n    }\n\n' "${auth_lines}"
-    printf '    @health {\n        path /health\n    }\n'
-    printf '    reverse_proxy @health 127.0.0.1:%s\n\n' "${GUNICORN_PORT}"
-    printf '    @uploads {\n        path /upload*\n    }\n'
-    printf '    reverse_proxy @uploads 127.0.0.1:%s {\n' "${GUNICORN_PORT}"
-    printf '        transport http {\n'
-    printf '            read_timeout  300s\n'
-    printf '            write_timeout 300s\n'
-    printf '            dial_timeout  10s\n'
-    printf '        }\n'
+    printf '    header {\n'
+    printf '        Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; frame-ancestors '\''none'\''"\n'
+    printf '        X-Content-Type-Options "nosniff"\n'
+    printf '        X-Frame-Options "DENY"\n'
+    printf '        Referrer-Policy "strict-origin-when-cross-origin"\n'
+    printf '        Permissions-Policy "geolocation=(), microphone=(), camera=()"\n'
     printf '    }\n\n'
-    printf '    root * %s/webapp\n' "${APP_DIR}"
-    printf '    file_server\n'
+    if [[ -n "${GATEWAY_BASICAUTH_USER}" && -n "${GATEWAY_BASICAUTH_HASHED_PASSWORD}" ]]; then
+        printf '    basic_auth {\n'
+        printf '        %s %s\n' "${GATEWAY_BASICAUTH_USER}" "${GATEWAY_BASICAUTH_HASHED_PASSWORD}"
+        printf '    }\n\n'
+    fi
+    printf '    @health {\n        path /health\n    }\n'
+    printf '    handle @health {\n        reverse_proxy 127.0.0.1:%s\n    }\n\n' "${GUNICORN_PORT}"
+    printf '    handle {\n'
+    printf '        reverse_proxy 127.0.0.1:%s {\n' "${GUNICORN_PORT}"
+    printf '            transport http {\n'
+    printf '                read_timeout  300s\n'
+    printf '                write_timeout 300s\n'
+    printf '                dial_timeout  10s\n'
+    printf '            }\n'
+    printf '        }\n'
+    printf '    }\n'
     printf '}\n'
 } >/etc/caddy/Caddyfile
 

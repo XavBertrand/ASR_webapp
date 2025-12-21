@@ -1,278 +1,97 @@
 # ASR WebApp
 
-This repository contains the web application that interfaces with the ASR system running on a Jetson device (see: [ASR_jetson](https://github.com/XavBertrand/ASR_jetson)). The webapp provides a front-end UI and backend server to interact with the speech‑to‑text service on Jetson.
+Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with application-level authentication (sessions, RBAC, optional admin 2FA) and an optional global “gateway” BasicAuth handled by Caddy.
 
-## Table of Contents
+## Roles and usage
+- **Admin**: logs in via `/login`, enables 2FA if required, manages users at `/admin/users` (create, reset password, enable/disable), reviews audit at `/admin/audit`, can regenerate recovery codes at `/admin/2fa/setup`.
+- **User**: logs in via `/login` then uses the main UI to upload audio/metadata. No admin access.
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-  - [Running](#running)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Development & Deployment](#development--deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+## Authentication flow
+- Username/password login with session cookies (HttpOnly + SameSite=Lax + Secure when HTTPS). Session is rotated on login.
+- CSRF required on all POST/PUT/DELETE (header `X-CSRF-Token` or form field `csrf_token`; token is stored in session and exposed via a readable `csrf_token` cookie).
+- RBAC: `/admin/*` is admin-only; `is_active=False` users are denied and their session is cleared.
+- Rate limiting: `/login` limited (5/min/IP + 20/hour/IP); sensitive admin endpoints limited (5/min). Backend configurable via `RATELIMIT_STORAGE_URL` (dev: memory; prod: shared Redis).
+- Real client IP only trusted via `TRUST_PROXY_HEADERS=true` (when behind a trusted reverse proxy). Direct hits on Gunicorn cannot spoof `X-Forwarded-For`.
+- Audit log: login success/fail, logout, user creation, password reset, active toggle, enable 2FA, recovery code use, bootstrap admin.
+- Admin 2FA (TOTP): if `REQUIRE_ADMIN_2FA=true`, admins are redirected to `/admin/2fa/setup` before any admin page. Secrets can be encrypted with `TOTP_ENC_KEY`. Recovery codes are generated only on demand (first setup or explicit “Regenerate”), shown once, and stored hashed.
 
-## Features
+## Key environment variables
+- Required: `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (≥12 chars). A bootstrap admin is created at startup if none exists.
+- Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (`memory://` by default; set `redis://...` for shared rate limits), `WEBAPP_ENV` (set to `production` to surface stricter warnings), `TRUST_PROXY_HEADERS` (true only when behind a trusted reverse proxy).
+- Uploads: `UPLOAD_FOLDER` (./recordings default), `MAX_CONTENT_LENGTH_MB` (default 100), `UPLOAD_UID` / `UPLOAD_GID` to chown uploads.
+- Gateway BasicAuth (Caddy, optional, global): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD` (from `caddy hash-password --plaintext '...'`). If empty, the Caddy lock is disabled.
+- Gunicorn: `GUNICORN_BIND_LOCAL_ONLY` (default true in production; forces bind on loopback), `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
-- Web interface to send audio or commands to the ASR system.
-- Real-time or near‑real-time transcription display.
-- Backend proxy / API that forwards requests to the Jetson endpoint.
-- Support for WebSocket or HTTP streaming (if implemented).
-- Cross-platform launch scripts (Shell, PowerShell, Batch).
-
-## Architecture
-
-The project is structured as follows:
-
-```
-/
-├── server/             ← backend server (e.g. Python, Flask, FastAPI, etc.)
-├── webapp/             ← frontend app (HTML / JS / CSS)
-├── run.sh              ← script to launch the full stack on Unix
-├── run.bat / run_simple.bat ← Windows wrappers
-├── setup_windows.ps1   ← Windows setup script
-└── .gitignore
-```
-
-- The **server/** folder handles HTTP/WebSocket requests from the front-end and forwards them to the Jetson ASR device (or returns responses).
-- The **webapp/** folder contains the client‑side code (web UI).
-- Launch scripts help to start both frontend + backend easily in development or production mode.
-
-## Getting Started
-
-### Prerequisites
-
-You will need:
-
-- A Jetson device running the ASR service (see `ASR_jetson` repository).
-- Node.js (for frontend, if applicable)
-- Python (or the language used by `server/`)
-- Network connectivity between this webapp host and the Jetson device (same LAN or accessible IP).
-- (Optional) WebSocket support, SSL/TLS if exposing over internet.
-
-### Installation
-
-1. Clone this repository:
-
-   ```bash
-   git clone https://github.com/XavBertrand/ASR_webapp.git
-   cd ASR_webapp
-   ```
-
-2. Install server dependencies:
-
-   ```bash
-   cd server
-   pip install -r requirements.txt
-   ```
-
-3. Install frontend dependencies (if applicable):
-
-   ```bash
-   cd ../webapp
-   npm install
-   ```
-
-### Configuration
-
-You need to configure how the webapp connects to the Jetson ASR service.
-
-In the server config (e.g. `server/config.py` or `.env`), set:
-
-- `JETSON_HOST` — IP or hostname of the Jetson ASR server
-- `JETSON_PORT` — port on which the ASR service listens
-- (Optional) API key, authentication, SSL settings
-
-In the frontend, you may need to set:
-
-- The backend API base URL
-- WebSocket URL (if using real-time streaming)
-
-### Running
-
-You can launch everything (virtualenv, dependencies, Gunicorn server bound to `0.0.0.0:8000`) with:
-
+## CLI (optional, everything is also doable in the UI)
 ```bash
-python launch_server.py
+uv run python -m server.manage create-admin --username alice --password "LongAdminPwd"
+uv run python -m server.manage create-user --username bob --password "Password123" --role user
+uv run python -m server.manage reset-password --username bob --password "NewPass123"
+uv run python -m server.manage disable-user --username bob
+uv run python -m server.manage enable-user --username bob
 ```
 
-Environment variables `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, and `GUNICORN_TIMEOUT` let you adjust the listener and worker count if needed.  
-To chain the Caddy reverse proxy (e.g. for DuckDNS/HTTPS), pass the Caddyfile path:
+## UI
+- `/login`: username/password + OTP (if admin 2FA). Errors are shown inline.
+- `/`: main webapp (upload). “Administration” link only appears for admins.
+- `/admin/users`: list users, create, reset password, toggle active/inactive.
+- `/admin/audit`: browse audit actions with simple filters.
+- `/admin/2fa/setup`: TOTP secret/URI + recovery codes; validate OTP to enable 2FA; regenerate recovery codes explicitly (old codes invalidated).
+- `/health`: public.
 
+## Quick dev install
 ```bash
-python launch_server.py --caddyfile ../Caddyfile.local
+UV_CACHE_DIR=.uv_cache uv sync
+export SECRET_KEY=dev-secret
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=SuperSecureAdmin!
+uv run python -m server.app
 ```
+Open http://127.0.0.1:8000/login, log in, and create users from `/admin/users`.
 
-Use `--caddyfile ../Caddyfile.public` for the public DuckDNS config (requires running the script with sufficient privileges to bind :80/:443 or a `setcap`-enabled Caddy binary). `--caddy-bin /full/path/to/caddy` overrides the binary if it is not on PATH.
+## Réinitialisation de mot de passe
+- Lien “Mot de passe oublié ?” sur `/login`. La réponse est toujours générique pour éviter l’énumération.
+- Si SMTP est configuré, un email est envoyé; sinon le lien est journalisé côté serveur (niveau WARNING) et visible dans l’audit (`password_reset_requested`).
+- Jetons à usage unique, expirent après `RESET_TOKEN_TTL_MINUTES` (30 par défaut), invalidés dès qu’un mot de passe est réinitialisé.
+- Variables SMTP : `MAIL_HOST`, `MAIL_PORT` (587 par défaut), `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_USE_TLS` (true/false).
 
-You can use the provided scripts to launch the app:
-
-- **Unix / Linux / macOS**:
-
-  ```bash
-  ./run.sh
-  ```
-
-- **Windows**:
-
-  ```bat
-  run.bat
-  ```
-
-Or in “simple” mode (just starting backend or frontend) via `run_simple.bat`.
-
-Alternatively, run manually:
-
+## Docker
 ```bash
-# In one terminal
-cd server
-python app.py
+docker build -t asr-webapp:latest .
+cat > .env <<'EOF'
+SECRET_KEY=change-me
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=SuperSecureAdmin!
+CADDY_DOMAIN=localhost
+# Optional: global gateway lock
+# GATEWAY_BASICAUTH_USER=gateway
+# GATEWAY_BASICAUTH_HASHED_PASSWORD=$(caddy hash-password --plaintext 'StrongGatewayPwd')
+EOF
 
-# In another terminal
-cd webapp
-npm start
+docker run -d \
+  --name asr-webapp \
+  --env-file .env \
+  -p 80:80 -p 443:443 \
+  -v "$(pwd)/recordings:/app/recordings" \
+  -v caddy-data:/root/.local/share/caddy \
+  -v caddy-config:/root/.config/caddy \
+  asr-webapp:latest
 ```
+Caddy keeps a single optional global BasicAuth pair if configured. All user auth is managed by the app. When Caddy is enabled, keep Gunicorn bound to loopback (`GUNICORN_BIND_LOCAL_ONLY=true`, `GUNICORN_HOST=127.0.0.1`) so it is not reachable directly; avoid `--network host` unless you intentionally expose port 8000 (not recommended).
 
-Then open your browser to `http://localhost:PORT` (default port defined in server/frontend config).
+## Security
+- Argon2id password hashing; no plaintext passwords stored or logged.
+- CSRF on all state-changing routes; token in session + readable cookie.
+- Session cookies: HttpOnly + SameSite=Lax (+ Secure in HTTPS). Session rotation on login.
+- Admin 2FA via TOTP (pyotp), hashed recovery codes; secrets can be encrypted with `TOTP_ENC_KEY`.
+- Rate limiting via Flask-Limiter; shared backend configurable with `RATELIMIT_STORAGE_URL`.
+- Security headers sent by Flask/Caddy: CSP (self + inline where needed), `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=strict-origin-when-cross-origin`, `Permissions-Policy=geolocation=(), microphone=(), camera=()`.
+- CORS is disabled by default; no `Access-Control-Allow-Origin` header is sent unless explicitly configured.
+- Real client IP is only trusted when `TRUST_PROXY_HEADERS=true` (behind a trusted reverse proxy such as Caddy).
+- Persistent audit log in SQLite (`audit_log`: ts, actor, target, action, ip, user-agent, metadata_json).
 
-#### Production via Docker (Caddy + DuckDNS automation)
-
-The provided `Dockerfile` now reproduces the full setup described in `SETUP_SERVER_FULL.md` (Gunicorn + Caddy HTTPS reverse proxy + optional DuckDNS cron). This keeps the host configuration minimal (only port-forwarding on the Livebox is assumed).
-
-1. Build the image:
-   ```bash
-   docker build -t asr-webapp:latest .
-   ```
-2. Create an `.env` file with at least the public domain and credentials:
-   ```bash
-   cat <<'EOF' > .env
-   CADDY_DOMAIN=ai-actionavocats.duckdns.org
-   CADDY_EMAIL=you@example.com
-   BASIC_AUTH_USER=xavier
-   BASIC_AUTH_PASSWORD=StrongPasswordHere
-   DUCKDNS_DOMAIN=ai-actionavocats
-   DUCKDNS_TOKEN=YOUR_DUCKDNS_TOKEN
-   EOF
-   ```
-3. Run the container (either with `--network host` or by publishing the ports):
-   ```bash
-   # Option A – Linux host with host networking
-   docker run -d \
-     --name asr-webapp \
-     --network host \
-     --env-file .env \
-     -v "$(pwd)/recordings:/app/recordings" \
-     -v caddy-data:/root/.local/share/caddy \
-      -v caddy-config:/root/.config/caddy \
-     asr-webapp:latest
-
-   # Option B – WSL2 / Windows: publish the ports explicitly
-   docker run -d \
-     --name asr-webapp \
-     --env-file .env \
-     -p 80:80 -p 443:443 -p 8000:8000 \
-     -v "$(pwd)/recordings:/app/recordings" \
-     -v caddy-data:/root/.local/share/caddy \
-      -v caddy-config:/root/.config/caddy \
-     asr-webapp:latest
-   ```
-   When running under WSL2, remember that Windows still needs the `netsh interface portproxy` rules from `SETUP_SERVER_FULL.md` so that traffic reaching Windows on 80/443 is forwarded to WSL/Docker.
-   If you see uploads owned by `root`, add `-e UPLOAD_UID=$(id -u) -e UPLOAD_GID=$(id -g)` (or set these in `.env`) so recordings inherit your host user/group even with Docker volumes.
-
-Environment variables recognized by the image:
-
-| Variable | Description | Default |
-| --- | --- | --- |
-| `CADDY_DOMAIN` | Public hostname (DuckDNS domain) served by Caddy | `localhost` |
-| `CADDY_EMAIL` | Optional email for Let’s Encrypt / ACME | empty |
-| `BASIC_AUTH_USER` | Username for HTTP Basic Auth | `xavier` |
-| `BASIC_AUTH_PASSWORD` | Plaintext password (hash generated automatically) | `MyPassword` |
-| `BASIC_AUTH_PASSWORD_HASH` | Precomputed hash (overrides plaintext) | empty |
-| `BASIC_AUTH_EXTRA_USERS` | Extra `username hash` pairs separated by `;` | empty |
-| `DUCKDNS_DOMAIN` / `DUCKDNS_TOKEN` | Enable automatic DuckDNS IP updates from inside the container | disabled |
-| `DUCKDNS_INTERVAL` | Seconds between DuckDNS refresh | `300` |
-| `GUNICORN_HOST`, `GUNICORN_PORT`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` | Gunicorn tuning | `0.0.0.0`, `8000`, `4`, `4`, `300` |
-| `UPLOAD_FOLDER` | Destination folder for uploaded audio (bind-mount `/app/recordings`) | `/app/recordings` |
-| `UPLOAD_UID` / `UPLOAD_GID` | UID/GID to apply to uploaded files (fallback to `stat` of `UPLOAD_FOLDER`) | empty |
-
-Uploads are stored per authenticated user (Basic Auth) under `UPLOAD_FOLDER/<user>/filename_timestamp.ext` with a companion `_meta.json` in the same folder. Mount `/app/recordings` on the host to retrieve them (a compatibility symlink exists at `/data/recordings` for legacy mounts).
-
-With these settings the image automatically:
-
-- Installs Python deps, Gunicorn, ffmpeg, Caddy.
-- Runs Gunicorn serving `server.app:app`.
-- Serves the `webapp/` static bundle via Caddy with HTTPS + HTTP/3.
-- Configures HTTP Basic Auth exactly like the manual Caddyfile in `SETUP_SERVER_FULL.md`.
-- Optionally keeps the DuckDNS IP fresh via the same cron URL as in the guide.
-
-This reduces manual host steps to: providing environment variables, ensuring the Livebox forwards 80/443 to the Docker host, and running `docker run`.
-
-## Usage
-
-Once running:
-
-1. Access the web UI.
-2. Upload or record audio (if feature supported).
-3. Submit to the ASR service.
-4. View the transcribed text or streaming result.
-5. Optionally, send commands or settings to adjust ASR behavior.
-
-You might also see status, logs, or error messages in the server console.
-
-## API Endpoints
-
-Here is a sample of API endpoints that the server provides (adjust as per your implementation):
-
-| Endpoint         | Method   | Description |
-|------------------|----------|-------------|
-| `/api/transcribe` | `POST`   | Send audio file or audio data to transcribe |
-| `/api/stream`     | `WebSocket` / `POST` | Real-time streaming ASR (if supported) |
-| `/api/status`     | `GET`    | Get status or health check of ASR backend |
-| `/api/config`     | `GET` / `POST` | Get or update settings (e.g. language, model) |
-
-Be sure to document all API routes, accepted payloads (e.g. audio format, JSON structure) and responses (transcription JSON, error codes).
-
-## Development & Deployment
-
-When developing:
-
-- Use hot-reload or watcher (on frontend)
-- Use logging and debugging in backend
-- Add CORS as needed
-
-For deployment:
-
-- Consider bundling frontend and serving as static assets via backend server
-- Use reverse proxy (e.g. Nginx)
-- Secure with HTTPS, authentication
-- Monitor latency, error rates
-
-## Troubleshooting
-
-- **Cannot connect to Jetson host** — check network, firewall, IP configuration.
-- **Timeouts or no response** — ensure the ASR system is running and reachable.
-- **CORS or browser errors** — adjust CORS headers in backend.
-- **Audio format not accepted** — convert to a supported format (e.g. WAV, 16 kHz, mono).
-- **WebSocket not working** — check if port open, proxy passes WebSocket traffic.
-
-## Contributing
-
-Contributions are welcome! Here are some ideas:
-
-- Add support for more audio formats
-- Improve frontend UI/UX
-- Add more ASR backend options
-- Add authentication / user accounts
-- Add test suite / CI integration
-
-Please fork, create a branch, and submit a pull request.
-
-## License
-
-Specify your license here (e.g. MIT, Apache 2.0, etc.).
+## Tests
+```bash
+UV_CACHE_DIR=.uv_cache uv run pytest
+```
+Coverage: bootstrap admin, login success/fail + rate limit, CSRF, RBAC non-admin, create+reset+login, 2FA (OTP + recovery), public /health.
