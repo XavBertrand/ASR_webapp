@@ -54,6 +54,10 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
 DEFAULT_UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", str(ROOT_DIR / "recordings"))
+DEFAULT_REPORTS_ROOT = os.environ.get("REPORTS_ROOT") or os.environ.get("RECORDINGS_DIR") or DEFAULT_UPLOAD_FOLDER
+DEFAULT_REPORTS_QUEUE_DIR = os.environ.get("REPORTS_QUEUE_DIR") or os.environ.get("ASR_QUEUE_DIR")
+if not DEFAULT_REPORTS_QUEUE_DIR:
+    DEFAULT_REPORTS_QUEUE_DIR = str(Path(DEFAULT_REPORTS_ROOT) / "queue")
 ALLOWED_EXTENSIONS = {"webm", "wav", "mp3", "ogg", "m4a", "mp4"}
 DEFAULT_MAX_MB = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100"))
 DEFAULT_DB_URI = os.environ.get("DATABASE_URL", f"sqlite:///{ROOT_DIR / 'app.db'}")
@@ -119,6 +123,59 @@ def apply_upload_permissions(path: str, *, is_dir: bool, base_dir: str | None = 
 
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def report_path_allowed(user: User, fname: str) -> bool:
+    if not fname.lower().endswith(".pdf"):
+        return False
+    parts = Path(fname).parts
+    if len(parts) < 4:
+        return False
+    if parts[1] != "output" or parts[2] != "pdf":
+        return False
+    if user.role == "admin":
+        return True
+    safe_username = secure_filename(user.username).strip("._")
+    return parts[0] == safe_username
+
+
+def _iso_from_epoch(epoch: float) -> str:
+    return datetime.utcfromtimestamp(epoch).isoformat() + "Z"
+
+
+def _parse_iso_timestamp(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        cleaned = value[:-1] + "+00:00" if value.endswith("Z") else value
+        return datetime.fromisoformat(cleaned).timestamp()
+    except ValueError:
+        return None
+
+
+def _queue_status(meta_path: Path, queue_dir: Path | None) -> str | None:
+    if not queue_dir:
+        return None
+    try:
+        rel = meta_path.relative_to(queue_dir)
+    except ValueError:
+        return None
+    if not rel.parts:
+        return None
+    head = rel.parts[0]
+    if head in {"pending", "processing", "done", "failed"}:
+        return head
+    return None
+
+
+def _load_meta(meta_path: Path) -> dict[str, Any] | None:
+    try:
+        with meta_path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Impossible de lire le metadata: %s", meta_path)
+        return None
 
 
 def wants_json_response() -> bool:
@@ -221,6 +278,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     mail_use_tls = _env_bool("MAIL_USE_TLS", True)
     app.config.update(
         UPLOAD_FOLDER=DEFAULT_UPLOAD_FOLDER,
+        REPORTS_ROOT=DEFAULT_REPORTS_ROOT,
+        REPORTS_QUEUE_DIR=DEFAULT_REPORTS_QUEUE_DIR,
         MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
         SQLALCHEMY_DATABASE_URI=DEFAULT_DB_URI,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
@@ -887,6 +946,144 @@ def register_routes(app: Flask) -> None:
         if not g.current_user or not user_can_access_path(g.current_user, fname):
             return json_error("Accès refusé", 403)
         return send_from_directory(app.config["UPLOAD_FOLDER"], fname)
+
+    @app.get("/reports/<path:fname>")
+    @login_required
+    def serve_report(fname):
+        if not g.current_user or not report_path_allowed(g.current_user, fname):
+            return json_error("Accès refusé", 403)
+        return send_from_directory(app.config["REPORTS_ROOT"], fname, as_attachment=True)
+
+    @app.get("/api/reports")
+    @login_required
+    def list_reports():
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        queue_dir = Path(app.config["REPORTS_QUEUE_DIR"]).expanduser() if app.config.get("REPORTS_QUEUE_DIR") else None
+
+        pdf_dir = root / user_folder / "output" / "pdf"
+        pdf_entries: list[dict[str, Any]] = []
+        if pdf_dir.is_dir():
+            for pdf_path in pdf_dir.glob("*.pdf"):
+                try:
+                    stat = pdf_path.stat()
+                except OSError:
+                    continue
+                pdf_entries.append(
+                    {
+                        "path": pdf_path,
+                        "name": pdf_path.name,
+                        "mtime": stat.st_mtime,
+                        "mtime_iso": _iso_from_epoch(stat.st_mtime),
+                    }
+                )
+
+        meta_paths: list[Path] = []
+        seen_meta: set[str] = set()
+        user_dir = root / user_folder
+        if user_dir.is_dir():
+            for meta_path in user_dir.glob("*_meta.json"):
+                meta_real = str(meta_path.resolve())
+                if meta_real not in seen_meta:
+                    seen_meta.add(meta_real)
+                    meta_paths.append(meta_path)
+
+        if queue_dir and queue_dir.is_dir():
+            for state in ("pending", "processing", "done", "failed"):
+                state_dir = queue_dir / state
+                if not state_dir.is_dir():
+                    continue
+                for meta_path in state_dir.glob("*_meta.json"):
+                    meta_real = str(meta_path.resolve())
+                    if meta_real not in seen_meta:
+                        seen_meta.add(meta_real)
+                        meta_paths.append(meta_path)
+
+        items: list[dict[str, Any]] = []
+        matched_pdfs: set[str] = set()
+
+        for meta_path in meta_paths:
+            meta = _load_meta(meta_path)
+            if not meta:
+                continue
+            if meta.get("user_folder") != user_folder:
+                continue
+            saved_filename = meta.get("saved_filename") or ""
+            recording_stem = Path(saved_filename).stem if saved_filename else ""
+            matches = [entry for entry in pdf_entries if recording_stem and recording_stem in entry["name"]]
+            matches.sort(key=lambda entry: entry["mtime"], reverse=True)
+            pdf_match = matches[0] if matches else None
+            if pdf_match:
+                matched_pdfs.add(pdf_match["name"])
+            queue_status = _queue_status(meta_path, queue_dir)
+            status = "ready" if pdf_match else "pending"
+            if not pdf_match and queue_status:
+                if queue_status == "processing":
+                    status = "processing"
+                elif queue_status == "pending":
+                    status = "queued"
+                elif queue_status == "failed":
+                    status = "failed"
+                elif queue_status == "done":
+                    status = "missing"
+
+            uploaded_at = meta.get("uploaded_at")
+            uploaded_ts = _parse_iso_timestamp(uploaded_at) if uploaded_at else None
+            if uploaded_ts is None:
+                try:
+                    uploaded_ts = meta_path.stat().st_mtime
+                except OSError:
+                    uploaded_ts = None
+
+            report_rel = None
+            if pdf_match:
+                report_rel = f"{user_folder}/output/pdf/{pdf_match['name']}"
+
+            items.append(
+                {
+                    "id": recording_stem or meta_path.stem,
+                    "display_name": meta.get("original_filename")
+                    or meta.get("saved_filename")
+                    or recording_stem
+                    or meta_path.stem,
+                    "meeting_date": meta.get("meeting_date"),
+                    "meeting_report_type": meta.get("meeting_report_type"),
+                    "uploaded_at": _iso_from_epoch(uploaded_ts) if uploaded_ts else None,
+                    "status": status,
+                    "report_filename": pdf_match["name"] if pdf_match else None,
+                    "report_created_at": pdf_match["mtime_iso"] if pdf_match else None,
+                    "download_url": f"/reports/{report_rel}" if report_rel else None,
+                }
+            )
+
+        for pdf_entry in pdf_entries:
+            if pdf_entry["name"] in matched_pdfs:
+                continue
+            name = pdf_entry["name"]
+            meeting_date = None
+            date_match = re.search(r"\d{4}-\d{2}-\d{2}", name)
+            if date_match:
+                meeting_date = date_match.group(0)
+            report_rel = f"{user_folder}/output/pdf/{name}"
+            items.append(
+                {
+                    "id": Path(name).stem,
+                    "display_name": name,
+                    "meeting_date": meeting_date,
+                    "meeting_report_type": None,
+                    "uploaded_at": pdf_entry["mtime_iso"],
+                    "status": "ready",
+                    "report_filename": name,
+                    "report_created_at": pdf_entry["mtime_iso"],
+                    "download_url": f"/reports/{report_rel}",
+                }
+            )
+
+        items.sort(
+            key=lambda entry: _parse_iso_timestamp(entry.get("uploaded_at")) or 0,
+            reverse=True,
+        )
+        return jsonify(items)
 
     @app.get("/admin/users")
     @admin_required

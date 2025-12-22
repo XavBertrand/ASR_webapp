@@ -339,6 +339,51 @@
             gap: 8px;
             align-items: center;
         }
+        .history-panel { gap: 10px; }
+        .history-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .history-main { display: flex; flex-direction: column; gap: 6px; }
+        .history-title { font-weight: 700; color: var(--text-main); }
+        .history-meta { color: var(--text-sub); font-size: 0.85rem; }
+        .history-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .status-pill {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .status-ready { color: #16a34a; background: rgba(34,197,94,0.16); border: 1px solid rgba(34,197,94,0.4); }
+        .status-processing { color: #38bdf8; background: rgba(14,165,233,0.16); border: 1px solid rgba(14,165,233,0.4); }
+        .status-queued { color: #f59e0b; background: rgba(251,191,36,0.18); border: 1px solid rgba(251,191,36,0.45); }
+        .status-failed { color: #f87171; background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.4); }
+        .status-missing { color: #cbd5f5; background: rgba(148,163,184,0.18); border: 1px solid rgba(148,163,184,0.45); }
+        .btn-mini {
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .btn-mini[aria-disabled="true"] {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
 
         @media (max-width: 640px) {
             main.page {
@@ -352,6 +397,8 @@
             .actions-card { gap: 6px; }
             .actions-card .btn { padding: 8px 6px; min-height: 70px; }
             .actions-card .btn span { font-size: 0.74rem; }
+            .history-item { flex-direction: column; align-items: flex-start; }
+            .history-actions { width: 100%; justify-content: space-between; }
         }
 
         @media (max-width: 420px) {
@@ -416,6 +463,11 @@
         <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>
         <rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>
     </symbol>
+    <symbol id="icon-history" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9"></circle>
+        <polyline points="12 7 12 12 15.5 14"></polyline>
+        <polyline points="3 4 3 9 8 9"></polyline>
+    </symbol>
 </svg>
 <div class="app">
     <div class="masthead">
@@ -438,11 +490,14 @@
         </header>
         <div class="tabbar">
             <div class="tablist" role="tablist" aria-label="Navigation principale">
-                <button class="tab" id="tabRecord" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
+                <button class="tab" id="tabRecord" data-tab="record" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
                     <svg class="icon" aria-hidden="true"><use href="#icon-mic"></use></svg> Enregistrement
                 </button>
-                <button class="tab" id="tabMeta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
+                <button class="tab" id="tabMeta" data-tab="meta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
                     <svg class="icon" aria-hidden="true"><use href="#icon-description"></use></svg> Informations
+                </button>
+                <button class="tab" id="tabHistory" data-tab="history" role="tab" aria-selected="false" aria-controls="panelHistory" tabindex="-1">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-history"></use></svg> Historique
                 </button>
             </div>
         </div>
@@ -553,6 +608,23 @@
                 </div>
             </div>
         </section>
+        <section class="tab-panel" id="panelHistory" role="tabpanel" aria-labelledby="tabHistory" hidden>
+            <div class="content">
+                <div class="panel history-panel">
+                    <div class="panel-head">
+                        <span>Historique des rapports</span>
+                        <button class="link-btn" id="refreshReports">Actualiser</button>
+                    </div>
+                    <div class="muted" id="reportsHint">Les rapports apparaissent ici dès l'envoi.</div>
+                    <div class="history-list" id="reportList"></div>
+                    <div class="muted hidden" id="reportEmpty">Aucun rapport pour l'instant.</div>
+                    <div class="warning-inline hidden" id="reportError">
+                        <svg class="icon" style="color:var(--warn);" aria-hidden="true"><use href="#icon-warning"></use></svg>
+                        <span>Impossible de charger l'historique.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
         <div class="bottom-spacer" aria-hidden="true"></div>
     </main>
 
@@ -619,8 +691,11 @@
                 this.activeTab = 'record';
                 this.metaSaveTimeout = null;
                 this.insetRaf = null;
+                this.reportPollId = null;
+                this.reportTypeLabels = {};
 
                 this.initElements();
+                this.initReportTypeLabels();
                 this.bindEvents();
                 this.setupTabsA11y(); // TABS A11Y
                 this.restoreMetadata();
@@ -647,10 +722,11 @@
 
             initElements() {
                 // TAB UI
-                this.tabs = [document.getElementById('tabRecord'), document.getElementById('tabMeta')];
+                this.tabs = Array.from(document.querySelectorAll('.tablist .tab'));
                 this.panels = {
                     record: document.getElementById('panelRecord'),
-                    meta: document.getElementById('panelMeta')
+                    meta: document.getElementById('panelMeta'),
+                    history: document.getElementById('panelHistory')
                 };
                 this.mainPage = document.querySelector('main.page');
                 this.metaSavedIndicator = document.getElementById('metaSavedIndicator');
@@ -687,6 +763,13 @@
                 this.loader = document.getElementById('loader');
                 this.canvasCtx = this.canvas.getContext('2d');
 
+                // Reports history
+                this.reportList = document.getElementById('reportList');
+                this.reportEmpty = document.getElementById('reportEmpty');
+                this.reportError = document.getElementById('reportError');
+                this.reportsHint = document.getElementById('reportsHint');
+                this.refreshReportsBtn = document.getElementById('refreshReports');
+
                 // Metadata
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
                 this.inputSpeakerContext = document.getElementById('inputSpeakerContext');
@@ -698,8 +781,11 @@
 
             bindEvents() {
                 // Tabs click
-                this.tabs[0].addEventListener('click', () => this.setActiveTab('record'));
-                this.tabs[1].addEventListener('click', () => this.setActiveTab('meta'));
+                this.tabs.forEach((tab) => {
+                    const tabKey = tab.dataset.tab;
+                    if (!tabKey) return;
+                    tab.addEventListener('click', () => this.setActiveTab(tabKey));
+                });
 
                 // Controls
                 this.btnImport.addEventListener('click', () => this.filePicker?.click());
@@ -716,6 +802,10 @@
                     }
                     event.target.value = '';
                 });
+
+                if (this.refreshReportsBtn) {
+                    this.refreshReportsBtn.addEventListener('click', () => this.loadReports());
+                }
 
                 // Metadata persistence
                 const metaInputs = [
@@ -778,7 +868,10 @@
                             this.tabs[lastIndex].focus();
                         } else if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            this.setActiveTab(index === 0 ? 'record' : 'meta');
+                            const key = tab.dataset.tab;
+                            if (key) {
+                                this.setActiveTab(key);
+                            }
                         }
                     });
                 });
@@ -798,27 +891,37 @@
             }
 
             setActiveTab(tab) {
+                if (!this.panels[tab]) return;
                 this.activeTab = tab;
-                const isRecord = tab === 'record';
-                this.tabs[0].setAttribute('aria-selected', isRecord);
-                this.tabs[1].setAttribute('aria-selected', !isRecord);
-                this.tabs[0].setAttribute('tabindex', isRecord ? '0' : '-1');
-                this.tabs[1].setAttribute('tabindex', isRecord ? '-1' : '0');
-                this.tabs[0].classList.toggle('active', isRecord);
-                this.tabs[1].classList.toggle('active', !isRecord);
-                this.panels.record.classList.toggle('active', isRecord);
-                this.panels.meta.classList.toggle('active', !isRecord);
-                this.panels.record.toggleAttribute('hidden', !isRecord);
-                this.panels.meta.toggleAttribute('hidden', isRecord);
+                this.tabs.forEach((tabEl) => {
+                    const key = tabEl.dataset.tab;
+                    const isActive = key === tab;
+                    tabEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                    tabEl.setAttribute('tabindex', isActive ? '0' : '-1');
+                    tabEl.classList.toggle('active', isActive);
+                });
+                Object.entries(this.panels).forEach(([key, panel]) => {
+                    if (!panel) return;
+                    const isActive = key === tab;
+                    panel.classList.toggle('active', isActive);
+                    panel.toggleAttribute('hidden', !isActive);
+                });
                 this.saveToLocalStorage(this.tabStorageKey, tab);
                 if (this.mainPage) {
                     this.mainPage.scrollTo({ top: 0, behavior: 'smooth' }); // TAB SWITCH SCROLL
+                }
+                if (tab === 'history') {
+                    this.loadReports();
+                    this.startReportPolling();
+                } else {
+                    this.stopReportPolling();
                 }
             }
 
             restoreTab() {
                 const stored = this.loadFromLocalStorage(this.tabStorageKey, 'record');
-                this.setActiveTab(stored === 'meta' ? 'meta' : 'record');
+                const target = this.panels[stored] ? stored : 'record';
+                this.setActiveTab(target);
             }
 
             restoreMetadata() {
@@ -831,11 +934,139 @@
                 }
             }
 
+            initReportTypeLabels() {
+                if (!this.inputMeetingReportType) return;
+                Array.from(this.inputMeetingReportType.options).forEach((opt) => {
+                    if (opt.value) {
+                        this.reportTypeLabels[opt.value] = opt.textContent.trim();
+                    }
+                });
+            }
+
             handleMetadataChange() {
                 const metadata = this.getFormMetadata({ validate: false });
                 this.saveToLocalStorage(this.metaStorageKey, metadata);
                 this.showMetaSaved();
                 this.clearMetadataWarning();
+            }
+
+            startReportPolling() {
+                if (this.reportPollId) return;
+                this.reportPollId = setInterval(() => {
+                    if (this.activeTab === 'history') {
+                        this.loadReports({ silent: true });
+                    }
+                }, 15000);
+            }
+
+            stopReportPolling() {
+                if (!this.reportPollId) return;
+                clearInterval(this.reportPollId);
+                this.reportPollId = null;
+            }
+
+            async loadReports(options = {}) {
+                if (!this.reportList) return;
+                const silent = Boolean(options.silent);
+                if (!silent && this.reportsHint) {
+                    this.reportsHint.textContent = "Chargement de l'historique...";
+                }
+                if (this.reportError) this.reportError.classList.add('hidden');
+                try {
+                    const res = await fetch(this.buildUrl('/api/reports'), { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Erreur serveur: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    this.renderReports(Array.isArray(data) ? data : []);
+                    if (this.reportsHint && !silent) {
+                        const stamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        this.reportsHint.textContent = `Dernière mise à jour: ${stamp}`;
+                    }
+                } catch (err) {
+                    if (this.reportError) this.reportError.classList.remove('hidden');
+                    if (this.reportEmpty) this.reportEmpty.classList.add('hidden');
+                    if (this.reportsHint) {
+                        this.reportsHint.textContent = "Impossible de charger l'historique.";
+                    }
+                }
+            }
+
+            renderReports(reports) {
+                if (!this.reportList) return;
+                this.reportList.innerHTML = '';
+                if (!reports.length) {
+                    if (this.reportEmpty) this.reportEmpty.classList.remove('hidden');
+                    return;
+                }
+                if (this.reportEmpty) this.reportEmpty.classList.add('hidden');
+
+                const statusMap = {
+                    ready: { label: 'Prêt', className: 'status-ready' },
+                    processing: { label: 'En cours', className: 'status-processing' },
+                    queued: { label: 'En file', className: 'status-queued' },
+                    pending: { label: 'En attente', className: 'status-queued' },
+                    failed: { label: 'Échec', className: 'status-failed' },
+                    missing: { label: 'Rapport indisponible', className: 'status-missing' }
+                };
+
+                reports.forEach((report) => {
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+
+                    const main = document.createElement('div');
+                    main.className = 'history-main';
+
+                    const title = document.createElement('div');
+                    title.className = 'history-title';
+                    const rawName = report.display_name || report.report_filename || 'Rapport';
+                    title.textContent = rawName.replace(/_/g, ' ');
+                    main.appendChild(title);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'history-meta';
+                    const metaParts = [];
+                    if (report.meeting_date) {
+                        metaParts.push(report.meeting_date);
+                    }
+                    if (report.meeting_report_type) {
+                        metaParts.push(this.reportTypeLabels[report.meeting_report_type] || report.meeting_report_type);
+                    }
+                    const createdAt = report.report_created_at || report.uploaded_at;
+                    if (createdAt) {
+                        const formatted = this.formatDateTime(createdAt);
+                        if (formatted) metaParts.push(formatted);
+                    }
+                    meta.textContent = metaParts.join(' • ');
+                    main.appendChild(meta);
+
+                    const actions = document.createElement('div');
+                    actions.className = 'history-actions';
+                    const status = statusMap[report.status] || statusMap.pending;
+                    const pill = document.createElement('span');
+                    pill.className = `status-pill ${status.className}`;
+                    pill.textContent = status.label;
+                    actions.appendChild(pill);
+
+                    const download = document.createElement('a');
+                    download.className = 'btn-mini';
+                    download.textContent = 'PDF';
+                    if (report.download_url) {
+                        download.href = report.download_url;
+                        download.setAttribute('download', '');
+                    } else {
+                        download.setAttribute('aria-disabled', 'true');
+                    }
+                    actions.appendChild(download);
+
+                    item.appendChild(main);
+                    item.appendChild(actions);
+                    this.reportList.appendChild(item);
+                });
             }
 
             showMetaSaved() {
@@ -865,6 +1096,13 @@
 
             getTodayIso() {
                 return new Date().toISOString().slice(0, 10);
+            }
+
+            formatDateTime(value) {
+                if (!value) return '';
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return '';
+                return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
             }
 
             formatDuration(seconds) {
