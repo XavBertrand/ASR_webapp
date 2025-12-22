@@ -343,14 +343,19 @@
         .history-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
         .history-item {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            flex-direction: column;
+            gap: 10px;
             padding: 12px;
             border-radius: 12px;
             background: #0f1624;
             border: 1px solid var(--stroke);
             box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
         .history-main { display: flex; flex-direction: column; gap: 6px; }
         .history-title { font-weight: 700; color: var(--text-main); }
@@ -384,6 +389,34 @@
             cursor: not-allowed;
             pointer-events: none;
         }
+        .btn-danger {
+            border-color: rgba(248,113,113,0.45);
+            background: rgba(127,29,29,0.35);
+            color: #fecaca;
+        }
+        .history-details {
+            width: 100%;
+            border-top: 1px dashed var(--stroke);
+            padding-top: 10px;
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .artifact-list {
+            display: grid;
+            gap: 6px;
+        }
+        .artifact-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+        .artifact-name { color: var(--text-main); font-weight: 600; }
+        .artifact-meta { font-size: 0.75rem; color: var(--text-sub); }
 
         @media (max-width: 640px) {
             main.page {
@@ -397,7 +430,7 @@
             .actions-card { gap: 6px; }
             .actions-card .btn { padding: 8px 6px; min-height: 70px; }
             .actions-card .btn span { font-size: 0.74rem; }
-            .history-item { flex-direction: column; align-items: flex-start; }
+            .history-header { flex-direction: column; align-items: flex-start; }
             .history-actions { width: 100%; justify-content: space-between; }
         }
 
@@ -996,6 +1029,27 @@
                 }
             }
 
+            async trashRun(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/trash`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadReports({ silent: true });
+                } catch (err) {
+                    alert("Impossible de déplacer vers la corbeille.");
+                }
+            }
+
             renderReports(reports) {
                 if (!this.reportList) return;
                 this.reportList.innerHTML = '';
@@ -1063,8 +1117,105 @@
                     }
                     actions.appendChild(download);
 
-                    item.appendChild(main);
-                    item.appendChild(actions);
+                    const filesBtn = document.createElement('button');
+                    filesBtn.className = 'btn-mini';
+                    filesBtn.type = 'button';
+                    filesBtn.textContent = 'Fichiers';
+                    actions.appendChild(filesBtn);
+
+                    const trashBtn = document.createElement('button');
+                    trashBtn.className = 'btn-mini btn-danger';
+                    trashBtn.type = 'button';
+                    trashBtn.textContent = 'Corbeille';
+                    trashBtn.addEventListener('click', () => {
+                        const id = report.run_id || report.id;
+                        if (!id) return;
+                        if (!confirm('Déplacer ce run vers la corbeille ?')) return;
+                        this.trashRun(id);
+                    });
+                    actions.appendChild(trashBtn);
+
+                    const header = document.createElement('div');
+                    header.className = 'history-header';
+                    header.appendChild(main);
+                    header.appendChild(actions);
+                    item.appendChild(header);
+
+                    const details = document.createElement('div');
+                    details.className = 'history-details hidden';
+                    const list = document.createElement('div');
+                    list.className = 'artifact-list';
+
+                    const entries = [];
+                    if (report.audio_url) {
+                        entries.push({
+                            label: 'Audio original',
+                            url: report.audio_url,
+                            meta: '',
+                            exists: true
+                        });
+                    }
+                    const artifacts = Array.isArray(report.artifacts) ? report.artifacts : [];
+                    artifacts.forEach((artifact) => {
+                        if (!artifact || !artifact.path) return;
+                        const metaParts = [];
+                        if (artifact.category) metaParts.push(artifact.category);
+                        if (artifact.size) metaParts.push(this.formatBytes(artifact.size));
+                        if (artifact.mtime) {
+                            const formatted = this.formatDateTime(artifact.mtime);
+                            if (formatted) metaParts.push(formatted);
+                        }
+                        entries.push({
+                            label: artifact.name || artifact.path,
+                            url: artifact.download_url,
+                            meta: metaParts.join(' • '),
+                            exists: artifact.exists !== false
+                        });
+                    });
+
+                    if (!entries.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'artifact-meta';
+                        empty.textContent = 'Aucun fichier disponible.';
+                        list.appendChild(empty);
+                    } else {
+                        entries.forEach((entry) => {
+                            const row = document.createElement('div');
+                            row.className = 'artifact-item';
+
+                            const name = document.createElement('div');
+                            name.className = 'artifact-name';
+                            name.textContent = entry.label;
+                            row.appendChild(name);
+
+                            const metaInfo = document.createElement('div');
+                            metaInfo.className = 'artifact-meta';
+                            metaInfo.textContent = entry.meta || '';
+                            row.appendChild(metaInfo);
+
+                            const link = document.createElement('a');
+                            link.className = 'btn-mini';
+                            link.textContent = 'Télécharger';
+                            if (entry.url && entry.exists) {
+                                link.href = entry.url;
+                                link.setAttribute('download', '');
+                            } else {
+                                link.setAttribute('aria-disabled', 'true');
+                            }
+                            row.appendChild(link);
+
+                            list.appendChild(row);
+                        });
+                    }
+
+                    details.appendChild(list);
+                    item.appendChild(details);
+
+                    filesBtn.addEventListener('click', () => {
+                        const hidden = details.classList.toggle('hidden');
+                        filesBtn.textContent = hidden ? 'Fichiers' : 'Masquer';
+                    });
+
                     this.reportList.appendChild(item);
                 });
             }
@@ -1103,6 +1254,21 @@
                 const date = new Date(value);
                 if (Number.isNaN(date.getTime())) return '';
                 return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+            }
+
+            formatBytes(value) {
+                const bytes = Number(value);
+                if (!Number.isFinite(bytes)) return '';
+                if (bytes <= 0) return '0 o';
+                const units = ['o', 'Ko', 'Mo', 'Go'];
+                let idx = 0;
+                let size = bytes;
+                while (size >= 1024 && idx < units.length - 1) {
+                    size /= 1024;
+                    idx += 1;
+                }
+                const rounded = size >= 10 ? Math.round(size) : Math.round(size * 10) / 10;
+                return `${rounded} ${units[idx]}`;
             }
 
             formatDuration(seconds) {
