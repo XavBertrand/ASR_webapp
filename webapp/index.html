@@ -14,7 +14,6 @@
     <link rel="apple-touch-icon" sizes="180x180" href="logo-180.png">
     <link rel="manifest" href="manifest.webmanifest">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         :root {
             --bg: #0b1220;
@@ -72,7 +71,19 @@
         .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
         .admin-link { display: none; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--primary); color: var(--primary); text-decoration: none; font-weight: 700; background: rgba(59,130,246,0.12); }
         .logout-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--stroke); background: #111827; color: var(--text-main); font-weight: 700; cursor: pointer; }
-        .logout-btn i { font-size: 20px; }
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            vertical-align: middle;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            flex-shrink: 0;
+        }
+        .logout-btn .icon { width: 20px; height: 20px; }
 
         .tabbar {
             border-top: 1px solid var(--stroke);
@@ -237,7 +248,7 @@
             min-height: 78px;
             box-shadow: 0 8px 20px rgba(0,0,0,0.14);
         }
-        .btn i { font-size: 24px; }
+        .btn .icon { width: 24px; height: 24px; }
         .btn span { font-size: 0.82rem; letter-spacing: 0.3px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; text-align: center; }
         .btn:active { transform: translateY(1px); }
         .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -251,7 +262,7 @@
             box-shadow: 0 14px 32px rgba(34, 211, 238, 0.25);
         }
         .btn-main span { color: #0b1220; font-weight: 700; }
-        .btn-main i { color: #0b1220; }
+        .btn-main .icon { color: #0b1220; }
         .btn-main:disabled { background: #1f2937; color: #6c7482; box-shadow: none; }
 
         .btn-ghost {
@@ -350,6 +361,62 @@
     </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <symbol id="icon-logout" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="10" height="16" rx="2"></rect>
+        <line x1="13" y1="12" x2="21" y2="12"></line>
+        <polyline points="17 8 21 12 17 16"></polyline>
+    </symbol>
+    <symbol id="icon-mic" viewBox="0 0 24 24">
+        <rect x="9" y="3" width="6" height="10" rx="3"></rect>
+        <path d="M6 11a6 6 0 0 0 12 0"></path>
+        <line x1="12" y1="17" x2="12" y2="21"></line>
+        <line x1="8" y1="21" x2="16" y2="21"></line>
+    </symbol>
+    <symbol id="icon-description" viewBox="0 0 24 24">
+        <rect x="5" y="3" width="14" height="18" rx="2"></rect>
+        <line x1="8" y1="8" x2="16" y2="8"></line>
+        <line x1="8" y1="12" x2="16" y2="12"></line>
+        <line x1="8" y1="16" x2="13" y2="16"></line>
+    </symbol>
+    <symbol id="icon-upload_file" viewBox="0 0 24 24">
+        <rect x="6" y="4" width="12" height="16" rx="2"></rect>
+        <line x1="12" y1="14" x2="12" y2="8"></line>
+        <polyline points="9 11 12 8 15 11"></polyline>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+        <line x1="12" y1="5" x2="12" y2="15"></line>
+        <polyline points="8 11 12 15 16 11"></polyline>
+        <line x1="5" y1="19" x2="19" y2="19"></line>
+    </symbol>
+    <symbol id="icon-delete_outline" viewBox="0 0 24 24">
+        <polyline points="5 7 19 7"></polyline>
+        <rect x="7" y="7" width="10" height="13" rx="2"></rect>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+        <rect x="9" y="3" width="6" height="3" rx="1"></rect>
+    </symbol>
+    <symbol id="icon-warning" viewBox="0 0 24 24">
+        <path d="M12 4l9 16H3z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"></circle>
+    </symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24">
+        <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"></rect>
+    </symbol>
+    <symbol id="icon-play_arrow" viewBox="0 0 24 24">
+        <polygon points="8 5 19 12 8 19" fill="currentColor" stroke="none"></polygon>
+    </symbol>
+    <symbol id="icon-cloud_upload" viewBox="0 0 24 24">
+        <path d="M7 18h9a4 4 0 0 0 0-8a5 5 0 0 0-9.5 1.5A3.5 3.5 0 0 0 7 18z"></path>
+        <line x1="12" y1="15" x2="12" y2="10"></line>
+        <polyline points="9 13 12 10 15 13"></polyline>
+    </symbol>
+    <symbol id="icon-pause" viewBox="0 0 24 24">
+        <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>
+        <rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>
+    </symbol>
+</svg>
 <div class="app">
     <div class="masthead">
         <header>
@@ -363,7 +430,7 @@
             <div class="header-actions">
                 <a id="admin-link" class="admin-link" href="/admin/users">Administration</a>
                 <button class="logout-btn" id="logoutBtn" title="Déconnexion">
-                    <i class="material-icons">logout</i>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-logout"></use></svg>
                     <span>Déconnexion</span>
                 </button>
                 <div class="lang">FR</div>
@@ -372,10 +439,10 @@
         <div class="tabbar">
             <div class="tablist" role="tablist" aria-label="Navigation principale">
                 <button class="tab" id="tabRecord" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
-                    <i class="material-icons">mic</i> Enregistrement
+                    <svg class="icon" aria-hidden="true"><use href="#icon-mic"></use></svg> Enregistrement
                 </button>
                 <button class="tab" id="tabMeta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
-                    <i class="material-icons">description</i> Informations
+                    <svg class="icon" aria-hidden="true"><use href="#icon-description"></use></svg> Informations
                 </button>
             </div>
         </div>
@@ -424,15 +491,15 @@
 
                 <div class="actions-card">
                     <button class="btn" id="btnImport">
-                        <i class="material-icons">upload_file</i>
+                        <svg class="icon" aria-hidden="true"><use href="#icon-upload_file"></use></svg>
                         <span>Importer</span>
                     </button>
                     <button class="btn" id="btnDownload" disabled>
-                        <i class="material-icons">download</i>
+                        <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
                         <span>Télécharger</span>
                     </button>
                     <button class="btn" id="btnTrash" disabled>
-                        <i class="material-icons">delete_outline</i>
+                        <svg class="icon" aria-hidden="true"><use href="#icon-delete_outline"></use></svg>
                         <span>Vider</span>
                     </button>
                 </div>
@@ -453,7 +520,7 @@
                         </div>
                     </div>
                     <div class="warning-inline hidden" id="metaWarning">
-                        <i class="material-icons" style="color:var(--warn);">warning</i>
+                        <svg class="icon" style="color:var(--warn);" aria-hidden="true"><use href="#icon-warning"></use></svg>
                         <span id="metaWarningText">Champs requis manquants.</span>
                     </div>
                     <div class="form-grid">
@@ -493,19 +560,19 @@
         <div class="controls-inner">
             <div class="controls-row">
                 <button class="btn btn-main" id="btnMain">
-                    <i class="material-icons" id="mainIcon">mic</i>
+                    <svg class="icon" id="mainIcon" aria-hidden="true"><use href="#icon-mic"></use></svg>
                     <span>Enregistrer</span>
                 </button>
                 <button class="btn" id="btnStop" disabled>
-                    <i class="material-icons">stop</i>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg>
                     <span>Stop</span>
                 </button>
                 <button class="btn" id="btnPlay" disabled>
-                    <i class="material-icons">play_arrow</i>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-play_arrow"></use></svg>
                     <span>Écouter</span>
                 </button>
                 <button class="btn" id="btnUpload" disabled>
-                    <i class="material-icons">cloud_upload</i>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-cloud_upload"></use></svg>
                     <span>Envoyer</span>
                 </button>
             </div>
@@ -594,6 +661,7 @@
                 this.btnImport = document.getElementById('btnImport');
                 this.btnMain = document.getElementById('btnMain');
                 this.mainIcon = document.getElementById('mainIcon');
+                this.mainIconUse = this.mainIcon ? this.mainIcon.querySelector('use') : null;
                 this.btnStop = document.getElementById('btnStop');
                 this.btnTrash = document.getElementById('btnTrash');
                 this.btnPlay = document.getElementById('btnPlay');
@@ -1337,6 +1405,13 @@
                 }
             }
 
+            setMainIcon(iconName) {
+                if (!this.mainIconUse) return;
+                const ref = `#icon-${iconName}`;
+                this.mainIconUse.setAttribute('href', ref);
+                this.mainIconUse.setAttribute('xlink:href', ref);
+            }
+
             updateUI() {
                 this.btnStop.disabled = !(this.state === 'recording' || this.state === 'paused');
                 const hasAudio = Boolean(this.audioBlob);
@@ -1346,13 +1421,13 @@
                 this.btnDownload.disabled = !hasAudio;
 
                 if (this.state === 'recording') {
-                    this.mainIcon.textContent = 'pause';
+                    this.setMainIcon('pause');
                     this.btnMain.querySelector('span').textContent = 'Mettre en pause';
                 } else if (this.state === 'paused') {
-                    this.mainIcon.textContent = 'play_arrow';
+                    this.setMainIcon('play_arrow');
                     this.btnMain.querySelector('span').textContent = 'Reprendre';
                 } else {
-                    this.mainIcon.textContent = 'mic';
+                    this.setMainIcon('mic');
                     this.btnMain.querySelector('span').textContent = 'Enregistrer';
                 }
 
