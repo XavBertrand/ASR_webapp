@@ -19,6 +19,7 @@ Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with applicatio
 - Required: `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (≥12 chars). A bootstrap admin is created at startup if none exists.
 - Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (`memory://` by default; set `redis://...` for shared rate limits), `WEBAPP_ENV` (set to `production` to surface stricter warnings), `TRUST_PROXY_HEADERS` (true only when behind a trusted reverse proxy).
 - Uploads: `UPLOAD_FOLDER` (./recordings default), `MAX_CONTENT_LENGTH_MB` (default 100), `UPLOAD_UID` / `UPLOAD_GID` to chown uploads.
+- Reports: `REPORTS_ROOT` (defaults to `UPLOAD_FOLDER`), `REPORTS_QUEUE_DIR` (defaults to `<REPORTS_ROOT>/queue`) for the History tab status.
 - Gateway BasicAuth (Caddy, optional, global): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD` (from `caddy hash-password --plaintext '...'`). If empty, the Caddy lock is disabled.
 - Gunicorn: `GUNICORN_BIND_LOCAL_ONLY` (default true in production; forces bind on loopback), `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
@@ -34,6 +35,7 @@ uv run python -m server.manage enable-user --username bob
 ## UI
 - `/login`: username/password + OTP (if admin 2FA). Errors are shown inline.
 - `/`: main webapp (upload). “Administration” link only appears for admins.
+- `/` History tab: lists the current user’s report PDFs from `<REPORTS_ROOT>/<user>/output/pdf/`, with queue status and direct download.
 - `/admin/users`: list users, create, reset password, toggle active/inactive.
 - `/admin/audit`: browse audit actions with simple filters.
 - `/admin/2fa/setup`: TOTP secret/URI + recovery codes; validate OTP to enable 2FA; regenerate recovery codes explicitly (old codes invalidated).
