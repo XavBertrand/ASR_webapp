@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root { color-scheme: light dark; }
+        *, *::before, *::after { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
         h1 { margin: 0; font-size: 1.2rem; }
         main { padding: 16px 20px; display: grid; gap: 16px; max-width: 900px; margin: 0 auto; }
         .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
@@ -20,7 +21,7 @@
         .code { background: #0f1624; border: 1px dashed #1f2937; border-radius: 10px; padding: 8px 10px; font-family: monospace; }
         .muted { color: #9ca3af; font-size: 0.95rem; }
         .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .actions { display: flex; gap: 10px; align-items: center; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
     </style>
 </head>
