@@ -59,16 +59,10 @@
             padding: 14px 18px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-end;
             gap: 12px;
         }
         .header-actions { display: flex; align-items: center; gap: 10px; }
-
-        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
-        .brand img { width: 42px; height: 42px; object-fit: contain; border-radius: 10px; background: #1f2937; padding: 8px; }
-        .brand small { display: block; font-weight: 500; color: var(--text-sub); }
-
-        .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
         .admin-link { display: none; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--primary); color: var(--primary); text-decoration: none; font-weight: 700; background: rgba(59,130,246,0.12); }
         .logout-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--stroke); background: #111827; color: var(--text-main); font-weight: 700; cursor: pointer; }
         .icon {
@@ -536,20 +530,12 @@
 <div class="app">
     <div class="masthead">
         <header>
-            <div class="brand">
-                <img src="logo.png" alt="Logo">
-                <div>
-                    <div>Action Avocats</div>
-                    <small>Enregistreur ASR</small>
-                </div>
-            </div>
             <div class="header-actions">
                 <a id="admin-link" class="admin-link" href="/admin/users">Administration</a>
                 <button class="logout-btn" id="logoutBtn" title="Déconnexion">
                     <svg class="icon" aria-hidden="true"><use href="#icon-logout"></use></svg>
                     <span>Déconnexion</span>
                 </button>
-                <div class="lang">FR</div>
             </div>
         </header>
         <div class="tabbar">
