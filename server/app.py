@@ -93,6 +93,65 @@ def _env_bool(env_name: str, default: bool = False) -> bool:
 ENV_UPLOAD_UID = _parse_env_int("UPLOAD_UID")
 ENV_UPLOAD_GID = _parse_env_int("UPLOAD_GID")
 
+DEFAULT_MEETING_REPORT_LABELS: dict[str, str] = {
+    "entretien_collaborateur": "Entretien collaborateur",
+    "entretien_client_particulier_contentieux": "Client particulier (contentieux)",
+    "entretien_client_professionnel_conseil": "Client professionnel (conseil)",
+    "entretien_client_professionnel_contentieux": "Client professionnel (contentieux)",
+}
+_PROMPTS_CACHE: dict[str, Any] = {}
+_PROMPTS_MTIME: float | None = None
+
+
+def _resolve_prompts_path() -> Path | None:
+    config_dir = os.environ.get("ASR_CONFIG_DIR", "").strip()
+    if not config_dir:
+        return None
+    path = Path(config_dir).expanduser() / "mistral_prompts.json"
+    if not path.is_absolute():
+        path = (ROOT_DIR / path).resolve()
+    return path
+
+
+def _load_prompts_data() -> dict[str, Any]:
+    global _PROMPTS_CACHE, _PROMPTS_MTIME
+    path = _resolve_prompts_path()
+    if not path or not path.exists():
+        return {}
+    try:
+        mtime = path.stat().st_mtime
+        if _PROMPTS_CACHE and _PROMPTS_MTIME == mtime:
+            return _PROMPTS_CACHE
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            _PROMPTS_CACHE = data
+            _PROMPTS_MTIME = mtime
+            return data
+    except Exception as exc:
+        logger.warning("Impossible de lire les prompts Mistral (%s): %s", path, exc)
+    return {}
+
+
+def _humanize_prompt_key(key: str) -> str:
+    cleaned = re.sub(r"[_\\s]+", " ", key).strip()
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else key
+
+
+def get_meeting_report_types() -> list[dict[str, str]]:
+    prompts = _load_prompts_data()
+    if prompts:
+        types: list[dict[str, str]] = []
+        for key, payload in prompts.items():
+            if not isinstance(key, str):
+                continue
+            label = None
+            if isinstance(payload, dict):
+                label = payload.get("label") or payload.get("title")
+            label = label or DEFAULT_MEETING_REPORT_LABELS.get(key) or _humanize_prompt_key(key)
+            types.append({"key": key, "label": label})
+        if types:
+            return types
+    return [{"key": key, "label": label} for key, label in DEFAULT_MEETING_REPORT_LABELS.items()]
 
 def resolve_upload_owner(base_dir: str) -> tuple[int, int]:
     """Return the uid/gid to apply on uploaded files."""
@@ -1078,6 +1137,13 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify(items)
 
+    @app.get("/api/meeting-report-types")
+    @login_required
+    def meeting_report_types():
+        types = get_meeting_report_types()
+        default_key = types[0]["key"] if types else ""
+        return jsonify({"types": types, "default": default_key})
+
     @app.post("/api/runs/<run_id>/trash")
     @login_required
     def trash_run(run_id: str):
@@ -1402,13 +1468,8 @@ def ensure_recovery_codes(user: User) -> list[str] | None:
 
 def extract_metadata(req_form) -> dict:
     default_prompt = os.environ.get("DEFAULT_ASR_PROMPT", "Kleos, Pennylane, CJD, Manupro, El Moussaoui")
-    meeting_report_types = [
-        "entretien_collaborateur",
-        "entretien_client_particulier_contentieux",
-        "entretien_client_professionnel_conseil",
-        "entretien_client_professionnel_contentieux",
-    ]
-    default_meeting_report_type = meeting_report_types[0]
+    meeting_report_types = [entry["key"] for entry in get_meeting_report_types() if entry.get("key")]
+    default_meeting_report_type = meeting_report_types[0] if meeting_report_types else ""
 
     def normalize_meeting_date(raw: str | None) -> str:
         if not raw:
@@ -1419,7 +1480,7 @@ def extract_metadata(req_form) -> dict:
             raise ValueError("meeting_date doit respecter le format YYYY-MM-DD")
 
     meeting_report_type = (req_form.get("meeting_report_type") or default_meeting_report_type).strip()
-    if meeting_report_type not in meeting_report_types:
+    if meeting_report_types and meeting_report_type not in meeting_report_types:
         raise ValueError("meeting_report_type invalide")
 
     asr_prompt = (req_form.get("asr_prompt") or default_prompt).strip()

@@ -96,9 +96,12 @@
             padding: 8px 14px;
             max-width: 960px;
             margin: 0 auto;
+            width: 100%;
+            flex-wrap: wrap;
         }
         .tab {
-            flex: 1;
+            flex: 1 1 0;
+            min-width: 0;
             background: #0f1624;
             border: 1px solid var(--stroke);
             color: var(--text-main);
@@ -111,6 +114,8 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            text-align: center;
+            line-height: 1.15;
         }
         .tab[aria-selected="true"] {
             border-color: var(--primary);
@@ -425,6 +430,16 @@
                 padding-right: 14px;
                 /* padding-bottom preserved via calc(...) DO NOT OVERRIDE PADDING-BOTTOM */
             }
+            .tablist { padding: 6px 10px; }
+            .tab {
+                padding: 8px 6px;
+                gap: 6px;
+                font-size: 0.82rem;
+                flex-direction: column;
+            }
+            .tab .icon { width: 18px; height: 18px; }
+            .panel-grid,
+            .form-grid { grid-template-columns: minmax(0, 1fr); }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 6px; }
             .actions-card { gap: 6px; }
@@ -635,7 +650,7 @@
                                 <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
                                 <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
                             </select>
-                            <small>Choix unique parmi les 4 catégories prises en charge.</small>
+                            <small>Choix unique parmi les catégories configurées.</small>
                         </div>
                     </div>
                 </div>
@@ -709,14 +724,9 @@
                 this.mimeType = 'audio/webm';
                 this.jetsonUrl = '';
                 this.baseUploadUrl = this.resolveBaseUrl();
-                this.reportTypes = [
-                    'entretien_collaborateur',
-                    'entretien_client_particulier_contentieux',
-                    'entretien_client_professionnel_conseil',
-                    'entretien_client_professionnel_contentieux',
-                ];
+                this.reportTypes = [];
                 this.defaultAsrPrompt = 'Kleos, Pennylane';
-                this.defaultMeetingReportType = this.reportTypes[0];
+                this.defaultMeetingReportType = '';
                 this.audioDurationSec = null;
                 this.currentFileName = '';
                 this.metaStorageKey = 'asr_meta';
@@ -728,12 +738,13 @@
                 this.reportTypeLabels = {};
 
                 this.initElements();
-                this.initReportTypeLabels();
+                this.initReportTypesFromSelect();
                 this.bindEvents();
                 this.setupTabsA11y(); // TABS A11Y
                 this.restoreMetadata();
                 this.restoreTab();
                 this.prefillFormValues();
+                this.loadMeetingReportTypes();
                 this.resizeCanvas();
                 this.updateViewportMetrics(); // ANDROID INSET UPDATE
 
@@ -967,13 +978,68 @@
                 }
             }
 
-            initReportTypeLabels() {
+            initReportTypesFromSelect() {
+                if (!this.inputMeetingReportType) return;
+                this.reportTypes = Array.from(this.inputMeetingReportType.options)
+                    .map((opt) => opt.value)
+                    .filter(Boolean);
+                this.defaultMeetingReportType = this.reportTypes[0] || '';
+                this.refreshReportTypeLabels();
+            }
+
+            refreshReportTypeLabels() {
+                this.reportTypeLabels = {};
                 if (!this.inputMeetingReportType) return;
                 Array.from(this.inputMeetingReportType.options).forEach((opt) => {
                     if (opt.value) {
                         this.reportTypeLabels[opt.value] = opt.textContent.trim();
                     }
                 });
+            }
+
+            applyReportTypes(types, defaultKey = '') {
+                if (!this.inputMeetingReportType || !Array.isArray(types) || types.length === 0) return;
+                const current = this.inputMeetingReportType.value;
+                this.inputMeetingReportType.textContent = '';
+                types.forEach((item) => {
+                    if (!item || !item.key) return;
+                    const opt = document.createElement('option');
+                    opt.value = item.key;
+                    opt.textContent = item.label || item.key;
+                    this.inputMeetingReportType.appendChild(opt);
+                });
+                this.reportTypes = types.map((item) => item.key).filter(Boolean);
+                if (defaultKey && this.reportTypes.includes(defaultKey)) {
+                    this.defaultMeetingReportType = defaultKey;
+                } else {
+                    this.defaultMeetingReportType = this.reportTypes[0] || '';
+                }
+                this.refreshReportTypeLabels();
+                if (current && this.reportTypes.includes(current)) {
+                    this.inputMeetingReportType.value = current;
+                } else if (this.defaultMeetingReportType) {
+                    this.inputMeetingReportType.value = this.defaultMeetingReportType;
+                }
+            }
+
+            async loadMeetingReportTypes() {
+                if (!this.inputMeetingReportType) return;
+                try {
+                    const res = await fetch(this.buildUrl('/api/meeting-report-types'), { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Erreur serveur: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    if (Array.isArray(data?.types) && data.types.length > 0) {
+                        this.applyReportTypes(data.types, data.default || '');
+                    }
+                } catch (err) {
+                    // keep local defaults
+                }
             }
 
             handleMetadataChange() {
