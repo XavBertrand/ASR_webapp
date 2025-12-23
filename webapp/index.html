@@ -449,7 +449,20 @@
             .actions-card .btn { padding: 8px 6px; min-height: 70px; }
             .actions-card .btn span { font-size: 0.74rem; }
             .history-header { flex-direction: column; align-items: flex-start; }
-            .history-actions { width: 100%; justify-content: space-between; }
+            .history-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                justify-content: start;
+            }
+            .history-actions .status-pill {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+            .history-actions .btn-mini {
+                width: 100%;
+                text-align: center;
+            }
         }
 
         @media (max-width: 420px) {
