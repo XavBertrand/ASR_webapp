@@ -26,3 +26,4 @@ server/recordings/*.mp3
 .DS_Store
 Thumbs.db
 /.env
+/recordings/

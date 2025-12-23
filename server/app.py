@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import secrets
+import shutil
 import smtplib
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -92,6 +93,65 @@ def _env_bool(env_name: str, default: bool = False) -> bool:
 ENV_UPLOAD_UID = _parse_env_int("UPLOAD_UID")
 ENV_UPLOAD_GID = _parse_env_int("UPLOAD_GID")
 
+DEFAULT_MEETING_REPORT_LABELS: dict[str, str] = {
+    "entretien_collaborateur": "Entretien collaborateur",
+    "entretien_client_particulier_contentieux": "Client particulier (contentieux)",
+    "entretien_client_professionnel_conseil": "Client professionnel (conseil)",
+    "entretien_client_professionnel_contentieux": "Client professionnel (contentieux)",
+}
+_PROMPTS_CACHE: dict[str, Any] = {}
+_PROMPTS_MTIME: float | None = None
+
+
+def _resolve_prompts_path() -> Path | None:
+    config_dir = os.environ.get("ASR_CONFIG_DIR", "").strip()
+    if not config_dir:
+        return None
+    path = Path(config_dir).expanduser() / "mistral_prompts.json"
+    if not path.is_absolute():
+        path = (ROOT_DIR / path).resolve()
+    return path
+
+
+def _load_prompts_data() -> dict[str, Any]:
+    global _PROMPTS_CACHE, _PROMPTS_MTIME
+    path = _resolve_prompts_path()
+    if not path or not path.exists():
+        return {}
+    try:
+        mtime = path.stat().st_mtime
+        if _PROMPTS_CACHE and _PROMPTS_MTIME == mtime:
+            return _PROMPTS_CACHE
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            _PROMPTS_CACHE = data
+            _PROMPTS_MTIME = mtime
+            return data
+    except Exception as exc:
+        logger.warning("Impossible de lire les prompts Mistral (%s): %s", path, exc)
+    return {}
+
+
+def _humanize_prompt_key(key: str) -> str:
+    cleaned = re.sub(r"[_\\s]+", " ", key).strip()
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else key
+
+
+def get_meeting_report_types() -> list[dict[str, str]]:
+    prompts = _load_prompts_data()
+    if prompts:
+        types: list[dict[str, str]] = []
+        for key, payload in prompts.items():
+            if not isinstance(key, str):
+                continue
+            label = None
+            if isinstance(payload, dict):
+                label = payload.get("label") or payload.get("title")
+            label = label or DEFAULT_MEETING_REPORT_LABELS.get(key) or _humanize_prompt_key(key)
+            types.append({"key": key, "label": label})
+        if types:
+            return types
+    return [{"key": key, "label": label} for key, label in DEFAULT_MEETING_REPORT_LABELS.items()]
 
 def resolve_upload_owner(base_dir: str) -> tuple[int, int]:
     """Return the uid/gid to apply on uploaded files."""
@@ -139,6 +199,18 @@ def report_path_allowed(user: User, fname: str) -> bool:
     return parts[0] == safe_username
 
 
+def run_path_allowed(user: User, fname: str) -> bool:
+    parts = Path(fname).parts
+    if len(parts) < 3:
+        return False
+    if parts[1] != "runs":
+        return False
+    if user.role == "admin":
+        return True
+    safe_username = secure_filename(user.username).strip("._")
+    return parts[0] == safe_username
+
+
 def _iso_from_epoch(epoch: float) -> str:
     return datetime.utcfromtimestamp(epoch).isoformat() + "Z"
 
@@ -176,6 +248,159 @@ def _load_meta(meta_path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         logger.warning("Impossible de lire le metadata: %s", meta_path)
         return None
+
+
+def _load_manifest(manifest_path: Path) -> dict[str, Any] | None:
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Impossible de lire le manifest: %s", manifest_path)
+        return None
+
+
+def _is_safe_run_id(run_id: str) -> bool:
+    if not run_id:
+        return False
+    parts = Path(run_id).parts
+    if len(parts) != 1:
+        return False
+    if parts[0] in {".", ".."}:
+        return False
+    return True
+
+
+def _update_run_metadata(run_root: Path, *, user_folder: str, old_run_id: str, new_run_id: str) -> None:
+    old_root = str(Path(user_folder) / "runs" / old_run_id)
+    new_root = str(Path(user_folder) / "runs" / new_run_id)
+    manifest_path = run_root / "manifest.json"
+    manifest = _load_manifest(manifest_path) if manifest_path.exists() else None
+    if isinstance(manifest, dict):
+        manifest["run_id"] = new_run_id
+        manifest["run_root"] = new_root
+        manifest["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        artifacts = manifest.get("artifacts")
+        if isinstance(artifacts, list) and old_root != new_root:
+            for entry in artifacts:
+                path_value = entry.get("path") if isinstance(entry, dict) else None
+                if not isinstance(path_value, str):
+                    continue
+                if path_value == old_root or path_value.startswith(old_root + "/"):
+                    entry["path"] = new_root + path_value[len(old_root):]
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    meta_path = run_root / "meta.json"
+    meta = _load_meta(meta_path) if meta_path.exists() else None
+    if isinstance(meta, dict):
+        meta["run_id"] = new_run_id
+        if "run_root" in meta:
+            meta["run_root"] = new_root
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _collect_run_entries(
+    runs_root: Path,
+    root: Path,
+    *,
+    allow_downloads: bool,
+    status_override: str | None = None,
+    include_trash_time: bool = False,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    if not runs_root.is_dir():
+        return items
+
+    for manifest_path in runs_root.glob("*/manifest.json"):
+        manifest = _load_manifest(manifest_path)
+        if not manifest:
+            continue
+        run_id = manifest.get("run_id") or manifest_path.parent.name
+        meta = manifest.get("meta") or {}
+        audio = manifest.get("audio") or {}
+        artifacts = manifest.get("artifacts") or []
+
+        artifact_entries: list[dict[str, Any]] = []
+        pdf_entry: dict[str, Any] | None = None
+        for artifact in artifacts:
+            path_value = artifact.get("path")
+            if not isinstance(path_value, str):
+                continue
+            path_obj = Path(path_value)
+            full_path = path_obj if path_obj.is_absolute() else (root / path_obj)
+            exists = full_path.is_file()
+            mtime_iso = None
+            if exists:
+                try:
+                    mtime_iso = _iso_from_epoch(full_path.stat().st_mtime)
+                except OSError:
+                    mtime_iso = None
+            rel_path = path_value if not path_obj.is_absolute() else None
+            entry = {
+                "path": path_value,
+                "name": artifact.get("name") or full_path.name,
+                "category": artifact.get("category"),
+                "size": artifact.get("size"),
+                "mtime": mtime_iso or artifact.get("mtime"),
+                "exists": exists,
+                "download_url": f"/runs/{rel_path}" if allow_downloads and rel_path else None,
+            }
+            artifact_entries.append(entry)
+            if path_value.lower().endswith(".pdf"):
+                if not pdf_entry or (entry.get("mtime") or "") > (pdf_entry.get("mtime") or ""):
+                    pdf_entry = entry
+
+        status = manifest.get("status") or "ready"
+        if status == "ready" and (not pdf_entry or not pdf_entry.get("exists")):
+            status = "missing"
+        if status_override:
+            status = status_override
+
+        created_at = manifest.get("created_at") or meta.get("uploaded_at")
+        if not created_at:
+            try:
+                created_at = _iso_from_epoch(manifest_path.stat().st_mtime)
+            except OSError:
+                created_at = None
+
+        trashed_at = None
+        if include_trash_time:
+            try:
+                trashed_at = _iso_from_epoch(manifest_path.parent.stat().st_mtime)
+            except OSError:
+                trashed_at = None
+
+        audio_path = audio.get("path")
+        audio_url = None
+        audio_exists = False
+        if isinstance(audio_path, str) and not Path(audio_path).is_absolute():
+            audio_full = root / audio_path
+            audio_exists = audio_full.is_file()
+            if audio_exists and allow_downloads:
+                audio_url = f"/recordings/{audio_path}"
+
+        items.append(
+            {
+                "id": run_id,
+                "run_id": run_id,
+                "display_name": audio.get("original_filename")
+                or audio.get("saved_filename")
+                or run_id,
+                "meeting_date": meta.get("meeting_date"),
+                "meeting_report_type": meta.get("meeting_report_type"),
+                "uploaded_at": created_at,
+                "trashed_at": trashed_at,
+                "status": "missing" if status == "ready" and (not audio_exists) else status,
+                "status_reason": (manifest.get("error") or {}).get("message"),
+                "report_filename": pdf_entry.get("name") if pdf_entry else None,
+                "report_created_at": pdf_entry.get("mtime") if pdf_entry else None,
+                "download_url": pdf_entry.get("download_url") if pdf_entry else None,
+                "audio_url": audio_url,
+                "artifacts": artifact_entries,
+            }
+        )
+
+    return items
 
 
 def wants_json_response() -> bool:
@@ -954,136 +1179,109 @@ def register_routes(app: Flask) -> None:
             return json_error("Accès refusé", 403)
         return send_from_directory(app.config["REPORTS_ROOT"], fname, as_attachment=True)
 
+    @app.get("/runs/<path:fname>")
+    @login_required
+    def serve_run_artifact(fname):
+        if not g.current_user or not run_path_allowed(g.current_user, fname):
+            return json_error("Accès refusé", 403)
+        return send_from_directory(app.config["REPORTS_ROOT"], fname, as_attachment=True)
+
     @app.get("/api/reports")
     @login_required
     def list_reports():
         user_folder = current_user_folder()
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
-        queue_dir = Path(app.config["REPORTS_QUEUE_DIR"]).expanduser() if app.config.get("REPORTS_QUEUE_DIR") else None
-
-        pdf_dir = root / user_folder / "output" / "pdf"
-        pdf_entries: list[dict[str, Any]] = []
-        if pdf_dir.is_dir():
-            for pdf_path in pdf_dir.glob("*.pdf"):
-                try:
-                    stat = pdf_path.stat()
-                except OSError:
-                    continue
-                pdf_entries.append(
-                    {
-                        "path": pdf_path,
-                        "name": pdf_path.name,
-                        "mtime": stat.st_mtime,
-                        "mtime_iso": _iso_from_epoch(stat.st_mtime),
-                    }
-                )
-
-        meta_paths: list[Path] = []
-        seen_meta: set[str] = set()
-        user_dir = root / user_folder
-        if user_dir.is_dir():
-            for meta_path in user_dir.glob("*_meta.json"):
-                meta_real = str(meta_path.resolve())
-                if meta_real not in seen_meta:
-                    seen_meta.add(meta_real)
-                    meta_paths.append(meta_path)
-
-        if queue_dir and queue_dir.is_dir():
-            for state in ("pending", "processing", "done", "failed"):
-                state_dir = queue_dir / state
-                if not state_dir.is_dir():
-                    continue
-                for meta_path in state_dir.glob("*_meta.json"):
-                    meta_real = str(meta_path.resolve())
-                    if meta_real not in seen_meta:
-                        seen_meta.add(meta_real)
-                        meta_paths.append(meta_path)
-
-        items: list[dict[str, Any]] = []
-        matched_pdfs: set[str] = set()
-
-        for meta_path in meta_paths:
-            meta = _load_meta(meta_path)
-            if not meta:
-                continue
-            if meta.get("user_folder") != user_folder:
-                continue
-            saved_filename = meta.get("saved_filename") or ""
-            recording_stem = Path(saved_filename).stem if saved_filename else ""
-            matches = [entry for entry in pdf_entries if recording_stem and recording_stem in entry["name"]]
-            matches.sort(key=lambda entry: entry["mtime"], reverse=True)
-            pdf_match = matches[0] if matches else None
-            if pdf_match:
-                matched_pdfs.add(pdf_match["name"])
-            queue_status = _queue_status(meta_path, queue_dir)
-            status = "ready" if pdf_match else "pending"
-            if not pdf_match and queue_status:
-                if queue_status == "processing":
-                    status = "processing"
-                elif queue_status == "pending":
-                    status = "queued"
-                elif queue_status == "failed":
-                    status = "failed"
-                elif queue_status == "done":
-                    status = "missing"
-
-            uploaded_at = meta.get("uploaded_at")
-            uploaded_ts = _parse_iso_timestamp(uploaded_at) if uploaded_at else None
-            if uploaded_ts is None:
-                try:
-                    uploaded_ts = meta_path.stat().st_mtime
-                except OSError:
-                    uploaded_ts = None
-
-            report_rel = None
-            if pdf_match:
-                report_rel = f"{user_folder}/output/pdf/{pdf_match['name']}"
-
-            items.append(
-                {
-                    "id": recording_stem or meta_path.stem,
-                    "display_name": meta.get("original_filename")
-                    or meta.get("saved_filename")
-                    or recording_stem
-                    or meta_path.stem,
-                    "meeting_date": meta.get("meeting_date"),
-                    "meeting_report_type": meta.get("meeting_report_type"),
-                    "uploaded_at": _iso_from_epoch(uploaded_ts) if uploaded_ts else None,
-                    "status": status,
-                    "report_filename": pdf_match["name"] if pdf_match else None,
-                    "report_created_at": pdf_match["mtime_iso"] if pdf_match else None,
-                    "download_url": f"/reports/{report_rel}" if report_rel else None,
-                }
-            )
-
-        for pdf_entry in pdf_entries:
-            if pdf_entry["name"] in matched_pdfs:
-                continue
-            name = pdf_entry["name"]
-            meeting_date = None
-            date_match = re.search(r"\d{4}-\d{2}-\d{2}", name)
-            if date_match:
-                meeting_date = date_match.group(0)
-            report_rel = f"{user_folder}/output/pdf/{name}"
-            items.append(
-                {
-                    "id": Path(name).stem,
-                    "display_name": name,
-                    "meeting_date": meeting_date,
-                    "meeting_report_type": None,
-                    "uploaded_at": pdf_entry["mtime_iso"],
-                    "status": "ready",
-                    "report_filename": name,
-                    "report_created_at": pdf_entry["mtime_iso"],
-                    "download_url": f"/reports/{report_rel}",
-                }
-            )
+        runs_root = root / user_folder / "runs"
+        items = _collect_run_entries(runs_root, root, allow_downloads=True)
 
         items.sort(
             key=lambda entry: _parse_iso_timestamp(entry.get("uploaded_at")) or 0,
             reverse=True,
         )
         return jsonify(items)
+
+    @app.get("/api/meeting-report-types")
+    @login_required
+    def meeting_report_types():
+        types = get_meeting_report_types()
+        default_key = types[0]["key"] if types else ""
+        return jsonify({"types": types, "default": default_key})
+
+    @app.post("/api/runs/<run_id>/trash")
+    @login_required
+    def trash_run(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        run_root = root / user_folder / "runs" / run_id
+        if not run_root.is_dir():
+            return json_error("Run introuvable", 404)
+        manifest = _load_manifest(run_root / "manifest.json") or {}
+        status = manifest.get("status")
+        if status in {"queued", "processing"}:
+            return json_error("Impossible de supprimer un run en cours", 409)
+        trash_root = root / user_folder / "trash"
+        trash_root.mkdir(parents=True, exist_ok=True)
+        dest = trash_root / run_id
+        if dest.exists():
+            suffix = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            dest = trash_root / f"{run_id}_{suffix}"
+        shutil.move(str(run_root), str(dest))
+        return jsonify({"ok": True, "trash_path": str(dest.relative_to(root))})
+
+    @app.get("/api/trash")
+    @login_required
+    def list_trash():
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        trash_root = root / user_folder / "trash"
+        items = _collect_run_entries(
+            trash_root,
+            root,
+            allow_downloads=False,
+            status_override="trashed",
+            include_trash_time=True,
+        )
+        items.sort(
+            key=lambda entry: _parse_iso_timestamp(entry.get("trashed_at")) or 0,
+            reverse=True,
+        )
+        return jsonify(items)
+
+    @app.post("/api/trash/<run_id>/restore")
+    @login_required
+    def restore_trash(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        trash_root = root / user_folder / "trash" / run_id
+        if not trash_root.is_dir():
+            return json_error("Run introuvable", 404)
+
+        dest_root = root / user_folder / "runs"
+        dest_root.mkdir(parents=True, exist_ok=True)
+        dest = dest_root / run_id
+        if dest.exists():
+            suffix = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            dest = dest_root / f"{run_id}_{suffix}"
+        shutil.move(str(trash_root), str(dest))
+        _update_run_metadata(dest, user_folder=user_folder, old_run_id=run_id, new_run_id=dest.name)
+        return jsonify({"ok": True, "run_id": dest.name})
+
+    @app.post("/api/trash/<run_id>/delete")
+    @login_required
+    def delete_trash(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        trash_root = root / user_folder / "trash" / run_id
+        if not trash_root.is_dir():
+            return json_error("Run introuvable", 404)
+        shutil.rmtree(str(trash_root))
+        return jsonify({"ok": True})
 
     @app.get("/admin/users")
     @admin_required
@@ -1388,13 +1586,8 @@ def ensure_recovery_codes(user: User) -> list[str] | None:
 
 def extract_metadata(req_form) -> dict:
     default_prompt = os.environ.get("DEFAULT_ASR_PROMPT", "Kleos, Pennylane, CJD, Manupro, El Moussaoui")
-    meeting_report_types = [
-        "entretien_collaborateur",
-        "entretien_client_particulier_contentieux",
-        "entretien_client_professionnel_conseil",
-        "entretien_client_professionnel_contentieux",
-    ]
-    default_meeting_report_type = meeting_report_types[0]
+    meeting_report_types = [entry["key"] for entry in get_meeting_report_types() if entry.get("key")]
+    default_meeting_report_type = meeting_report_types[0] if meeting_report_types else ""
 
     def normalize_meeting_date(raw: str | None) -> str:
         if not raw:
@@ -1405,7 +1598,7 @@ def extract_metadata(req_form) -> dict:
             raise ValueError("meeting_date doit respecter le format YYYY-MM-DD")
 
     meeting_report_type = (req_form.get("meeting_report_type") or default_meeting_report_type).strip()
-    if meeting_report_type not in meeting_report_types:
+    if meeting_report_types and meeting_report_type not in meeting_report_types:
         raise ValueError("meeting_report_type invalide")
 
     asr_prompt = (req_form.get("asr_prompt") or default_prompt).strip()

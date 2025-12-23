@@ -6,21 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root { color-scheme: light dark; }
+        *, *::before, *::after { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
         h1 { margin: 0; font-size: 1.2rem; }
         main { padding: 16px 20px; display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
         .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
         label { display: block; margin-top: 10px; font-weight: 600; }
         input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
         button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; }
+        .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.95rem; }
         th, td { padding: 10px; border-bottom: 1px solid #1f2937; text-align: left; vertical-align: top; }
         pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
         a { color: #93c5fd; }
         .meta { color: #9ca3af; font-size: 0.9rem; }
-        .pagination { display: flex; gap: 8px; align-items: center; }
-        .actions { display: flex; gap: 10px; align-items: center; }
+        .pagination { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
     </style>
 </head>
@@ -47,30 +49,32 @@
         </section>
 
         <section class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Action</th>
-                        <th>Acteur</th>
-                        <th>Cible</th>
-                        <th>IP</th>
-                        <th>Métadonnées</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for e in entries %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
                         <tr>
-                            <td>{{ e.ts.isoformat() }}Z</td>
-                            <td>{{ e.action }}</td>
-                            <td>{{ e.actor_username_snapshot or '-' }}</td>
-                            <td>{{ e.target_username_snapshot or '-' }}</td>
-                            <td>{{ e.ip or '-' }}</td>
-                            <td><pre>{{ e.metadata_json or '' }}</pre></td>
+                            <th>Date</th>
+                            <th>Action</th>
+                            <th>Acteur</th>
+                            <th>Cible</th>
+                            <th>IP</th>
+                            <th>Métadonnées</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {% for e in entries %}
+                            <tr>
+                                <td>{{ e.ts.isoformat() }}Z</td>
+                                <td>{{ e.action }}</td>
+                                <td>{{ e.actor_username_snapshot or '-' }}</td>
+                                <td>{{ e.target_username_snapshot or '-' }}</td>
+                                <td>{{ e.ip or '-' }}</td>
+                                <td><pre>{{ e.metadata_json or '' }}</pre></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             <div class="pagination">
                 {% if pagination.has_prev %}
                     <a href="?page={{ pagination.prev_num }}&per_page={{ pagination.per_page }}&action={{ action }}&username={{ username }}">Précédent</a>

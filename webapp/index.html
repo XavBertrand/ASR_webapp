@@ -96,9 +96,12 @@
             padding: 8px 14px;
             max-width: 960px;
             margin: 0 auto;
+            width: 100%;
+            flex-wrap: wrap;
         }
         .tab {
-            flex: 1;
+            flex: 1 1 0;
+            min-width: 0;
             background: #0f1624;
             border: 1px solid var(--stroke);
             color: var(--text-main);
@@ -111,6 +114,8 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            text-align: center;
+            line-height: 1.15;
         }
         .tab[aria-selected="true"] {
             border-color: var(--primary);
@@ -174,6 +179,7 @@
         }
         .panel.show { opacity: 1; }
         .panel-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-weight: 600; color: var(--text-sub); }
+        .panel-actions { display: flex; align-items: center; gap: 8px; }
         .pill { padding: 4px 10px; border-radius: 999px; background: #1f2937; color: var(--text-main); font-size: 0.8rem; }
         .muted { color: var(--text-sub); font-size: 0.95rem; margin-top: 10px; }
 
@@ -343,14 +349,19 @@
         .history-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
         .history-item {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            flex-direction: column;
+            gap: 10px;
             padding: 12px;
             border-radius: 12px;
             background: #0f1624;
             border: 1px solid var(--stroke);
             box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
         .history-main { display: flex; flex-direction: column; gap: 6px; }
         .history-title { font-weight: 700; color: var(--text-main); }
@@ -384,21 +395,74 @@
             cursor: not-allowed;
             pointer-events: none;
         }
+        .btn-danger {
+            border-color: rgba(248,113,113,0.45);
+            background: rgba(127,29,29,0.35);
+            color: #fecaca;
+        }
+        .history-details {
+            width: 100%;
+            border-top: 1px dashed var(--stroke);
+            padding-top: 10px;
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .artifact-list {
+            display: grid;
+            gap: 6px;
+        }
+        .artifact-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+        .artifact-name { color: var(--text-main); font-weight: 600; }
+        .artifact-meta { font-size: 0.75rem; color: var(--text-sub); }
 
         @media (max-width: 640px) {
+            header { flex-wrap: wrap; align-items: flex-start; }
+            .header-actions { flex-wrap: wrap; min-width: 0; justify-content: flex-start; }
             main.page {
                 padding-top: 14px;
                 padding-left: 14px;
                 padding-right: 14px;
                 /* padding-bottom preserved via calc(...) DO NOT OVERRIDE PADDING-BOTTOM */
             }
+            .tablist { padding: 6px 10px; }
+            .tab {
+                padding: 8px 6px;
+                gap: 6px;
+                font-size: 0.82rem;
+                flex-direction: column;
+            }
+            .tab .icon { width: 18px; height: 18px; }
+            .panel-grid,
+            .form-grid { grid-template-columns: minmax(0, 1fr); }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 6px; }
             .actions-card { gap: 6px; }
             .actions-card .btn { padding: 8px 6px; min-height: 70px; }
             .actions-card .btn span { font-size: 0.74rem; }
-            .history-item { flex-direction: column; align-items: flex-start; }
-            .history-actions { width: 100%; justify-content: space-between; }
+            .history-header { flex-direction: column; align-items: flex-start; }
+            .history-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                justify-content: start;
+            }
+            .history-actions .status-pill {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+            .history-actions .btn-mini {
+                width: 100%;
+                text-align: center;
+            }
         }
 
         @media (max-width: 420px) {
@@ -602,7 +666,7 @@
                                 <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
                                 <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
                             </select>
-                            <small>Choix unique parmi les 4 catégories prises en charge.</small>
+                            <small>Choix unique parmi les catégories configurées.</small>
                         </div>
                     </div>
                 </div>
@@ -612,8 +676,11 @@
             <div class="content">
                 <div class="panel history-panel">
                     <div class="panel-head">
-                        <span>Historique des rapports</span>
-                        <button class="link-btn" id="refreshReports">Actualiser</button>
+                        <span id="historyTitle">Historique des rapports</span>
+                        <div class="panel-actions">
+                            <button class="link-btn" id="toggleTrash">Corbeille</button>
+                            <button class="link-btn" id="refreshReports">Actualiser</button>
+                        </div>
                     </div>
                     <div class="muted" id="reportsHint">Les rapports apparaissent ici dès l'envoi.</div>
                     <div class="history-list" id="reportList"></div>
@@ -676,14 +743,9 @@
                 this.mimeType = 'audio/webm';
                 this.jetsonUrl = '';
                 this.baseUploadUrl = this.resolveBaseUrl();
-                this.reportTypes = [
-                    'entretien_collaborateur',
-                    'entretien_client_particulier_contentieux',
-                    'entretien_client_professionnel_conseil',
-                    'entretien_client_professionnel_contentieux',
-                ];
+                this.reportTypes = [];
                 this.defaultAsrPrompt = 'Kleos, Pennylane';
-                this.defaultMeetingReportType = this.reportTypes[0];
+                this.defaultMeetingReportType = '';
                 this.audioDurationSec = null;
                 this.currentFileName = '';
                 this.metaStorageKey = 'asr_meta';
@@ -693,14 +755,17 @@
                 this.insetRaf = null;
                 this.reportPollId = null;
                 this.reportTypeLabels = {};
+                this.showTrash = false;
 
                 this.initElements();
-                this.initReportTypeLabels();
+                this.updateHistoryHeader();
+                this.initReportTypesFromSelect();
                 this.bindEvents();
                 this.setupTabsA11y(); // TABS A11Y
                 this.restoreMetadata();
                 this.restoreTab();
                 this.prefillFormValues();
+                this.loadMeetingReportTypes();
                 this.resizeCanvas();
                 this.updateViewportMetrics(); // ANDROID INSET UPDATE
 
@@ -769,6 +834,8 @@
                 this.reportError = document.getElementById('reportError');
                 this.reportsHint = document.getElementById('reportsHint');
                 this.refreshReportsBtn = document.getElementById('refreshReports');
+                this.toggleTrashBtn = document.getElementById('toggleTrash');
+                this.historyTitle = document.getElementById('historyTitle');
 
                 // Metadata
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
@@ -804,7 +871,10 @@
                 });
 
                 if (this.refreshReportsBtn) {
-                    this.refreshReportsBtn.addEventListener('click', () => this.loadReports());
+                    this.refreshReportsBtn.addEventListener('click', () => this.loadHistory());
+                }
+                if (this.toggleTrashBtn) {
+                    this.toggleTrashBtn.addEventListener('click', () => this.toggleTrashView());
                 }
 
                 // Metadata persistence
@@ -911,7 +981,8 @@
                     this.mainPage.scrollTo({ top: 0, behavior: 'smooth' }); // TAB SWITCH SCROLL
                 }
                 if (tab === 'history') {
-                    this.loadReports();
+                    this.updateHistoryHeader();
+                    this.loadHistory();
                     this.startReportPolling();
                 } else {
                     this.stopReportPolling();
@@ -934,13 +1005,68 @@
                 }
             }
 
-            initReportTypeLabels() {
+            initReportTypesFromSelect() {
+                if (!this.inputMeetingReportType) return;
+                this.reportTypes = Array.from(this.inputMeetingReportType.options)
+                    .map((opt) => opt.value)
+                    .filter(Boolean);
+                this.defaultMeetingReportType = this.reportTypes[0] || '';
+                this.refreshReportTypeLabels();
+            }
+
+            refreshReportTypeLabels() {
+                this.reportTypeLabels = {};
                 if (!this.inputMeetingReportType) return;
                 Array.from(this.inputMeetingReportType.options).forEach((opt) => {
                     if (opt.value) {
                         this.reportTypeLabels[opt.value] = opt.textContent.trim();
                     }
                 });
+            }
+
+            applyReportTypes(types, defaultKey = '') {
+                if (!this.inputMeetingReportType || !Array.isArray(types) || types.length === 0) return;
+                const current = this.inputMeetingReportType.value;
+                this.inputMeetingReportType.textContent = '';
+                types.forEach((item) => {
+                    if (!item || !item.key) return;
+                    const opt = document.createElement('option');
+                    opt.value = item.key;
+                    opt.textContent = item.label || item.key;
+                    this.inputMeetingReportType.appendChild(opt);
+                });
+                this.reportTypes = types.map((item) => item.key).filter(Boolean);
+                if (defaultKey && this.reportTypes.includes(defaultKey)) {
+                    this.defaultMeetingReportType = defaultKey;
+                } else {
+                    this.defaultMeetingReportType = this.reportTypes[0] || '';
+                }
+                this.refreshReportTypeLabels();
+                if (current && this.reportTypes.includes(current)) {
+                    this.inputMeetingReportType.value = current;
+                } else if (this.defaultMeetingReportType) {
+                    this.inputMeetingReportType.value = this.defaultMeetingReportType;
+                }
+            }
+
+            async loadMeetingReportTypes() {
+                if (!this.inputMeetingReportType) return;
+                try {
+                    const res = await fetch(this.buildUrl('/api/meeting-report-types'), { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Erreur serveur: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    if (Array.isArray(data?.types) && data.types.length > 0) {
+                        this.applyReportTypes(data.types, data.default || '');
+                    }
+                } catch (err) {
+                    // keep local defaults
+                }
             }
 
             handleMetadataChange() {
@@ -954,7 +1080,7 @@
                 if (this.reportPollId) return;
                 this.reportPollId = setInterval(() => {
                     if (this.activeTab === 'history') {
-                        this.loadReports({ silent: true });
+                        this.loadHistory({ silent: true });
                     }
                 }, 15000);
             }
@@ -963,6 +1089,31 @@
                 if (!this.reportPollId) return;
                 clearInterval(this.reportPollId);
                 this.reportPollId = null;
+            }
+
+            updateHistoryHeader() {
+                if (this.historyTitle) {
+                    this.historyTitle.textContent = this.showTrash ? 'Corbeille' : 'Historique des rapports';
+                }
+                if (this.toggleTrashBtn) {
+                    this.toggleTrashBtn.textContent = this.showTrash ? 'Historique' : 'Corbeille';
+                }
+                if (this.reportEmpty) {
+                    this.reportEmpty.textContent = this.showTrash ? 'Corbeille vide.' : "Aucun rapport pour l'instant.";
+                }
+            }
+
+            toggleTrashView() {
+                this.showTrash = !this.showTrash;
+                this.updateHistoryHeader();
+                this.loadHistory();
+            }
+
+            loadHistory(options = {}) {
+                if (this.showTrash) {
+                    return this.loadTrash(options);
+                }
+                return this.loadReports(options);
             }
 
             async loadReports(options = {}) {
@@ -996,6 +1147,100 @@
                 }
             }
 
+            async loadTrash(options = {}) {
+                if (!this.reportList) return;
+                const silent = Boolean(options.silent);
+                if (!silent && this.reportsHint) {
+                    this.reportsHint.textContent = "Chargement de la corbeille...";
+                }
+                if (this.reportError) this.reportError.classList.add('hidden');
+                try {
+                    const res = await fetch(this.buildUrl('/api/trash'), { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Erreur serveur: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    this.renderReports(Array.isArray(data) ? data : []);
+                    if (this.reportsHint && !silent) {
+                        const stamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        this.reportsHint.textContent = `Dernière mise à jour: ${stamp}`;
+                    }
+                } catch (err) {
+                    if (this.reportError) this.reportError.classList.remove('hidden');
+                    if (this.reportEmpty) this.reportEmpty.classList.add('hidden');
+                    if (this.reportsHint) {
+                        this.reportsHint.textContent = "Impossible de charger la corbeille.";
+                    }
+                }
+            }
+
+            async trashRun(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/trash`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de déplacer vers la corbeille.");
+                }
+            }
+
+            async restoreRun(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/restore`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Restauration impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de restaurer ce run.");
+                }
+            }
+
+            async deleteRunPermanently(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/delete`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de supprimer définitivement ce run.");
+                }
+            }
+
             renderReports(reports) {
                 if (!this.reportList) return;
                 this.reportList.innerHTML = '';
@@ -1011,7 +1256,8 @@
                     queued: { label: 'En file', className: 'status-queued' },
                     pending: { label: 'En attente', className: 'status-queued' },
                     failed: { label: 'Échec', className: 'status-failed' },
-                    missing: { label: 'Rapport indisponible', className: 'status-missing' }
+                    missing: { label: 'Rapport indisponible', className: 'status-missing' },
+                    trashed: { label: 'Corbeille', className: 'status-missing' }
                 };
 
                 reports.forEach((report) => {
@@ -1036,6 +1282,10 @@
                     if (report.meeting_report_type) {
                         metaParts.push(this.reportTypeLabels[report.meeting_report_type] || report.meeting_report_type);
                     }
+                    if (this.showTrash && report.trashed_at) {
+                        const trashedLabel = this.formatDateTime(report.trashed_at);
+                        if (trashedLabel) metaParts.push(`Supprimé le ${trashedLabel}`);
+                    }
                     const createdAt = report.report_created_at || report.uploaded_at;
                     if (createdAt) {
                         const formatted = this.formatDateTime(createdAt);
@@ -1055,7 +1305,7 @@
                     const download = document.createElement('a');
                     download.className = 'btn-mini';
                     download.textContent = 'PDF';
-                    if (report.download_url) {
+                    if (!this.showTrash && report.download_url) {
                         download.href = report.download_url;
                         download.setAttribute('download', '');
                     } else {
@@ -1063,8 +1313,132 @@
                     }
                     actions.appendChild(download);
 
-                    item.appendChild(main);
-                    item.appendChild(actions);
+                    const filesBtn = document.createElement('button');
+                    filesBtn.className = 'btn-mini';
+                    filesBtn.type = 'button';
+                    filesBtn.textContent = 'Fichiers';
+                    actions.appendChild(filesBtn);
+
+                    if (this.showTrash) {
+                        const restoreBtn = document.createElement('button');
+                        restoreBtn.className = 'btn-mini';
+                        restoreBtn.type = 'button';
+                        restoreBtn.textContent = 'Restaurer';
+                        restoreBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Restaurer ce run depuis la corbeille ?')) return;
+                            this.restoreRun(id);
+                        });
+                        actions.appendChild(restoreBtn);
+
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn-mini btn-danger';
+                        deleteBtn.type = 'button';
+                        deleteBtn.textContent = 'Supprimer';
+                        deleteBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Supprimer définitivement ce run ?')) return;
+                            if (!confirm('Cette action est irréversible. Confirmer ?')) return;
+                            this.deleteRunPermanently(id);
+                        });
+                        actions.appendChild(deleteBtn);
+                    } else {
+                        const trashBtn = document.createElement('button');
+                        trashBtn.className = 'btn-mini btn-danger';
+                        trashBtn.type = 'button';
+                        trashBtn.textContent = 'Corbeille';
+                        trashBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Déplacer ce run vers la corbeille ?')) return;
+                            this.trashRun(id);
+                        });
+                        actions.appendChild(trashBtn);
+                    }
+
+                    const header = document.createElement('div');
+                    header.className = 'history-header';
+                    header.appendChild(main);
+                    header.appendChild(actions);
+                    item.appendChild(header);
+
+                    const details = document.createElement('div');
+                    details.className = 'history-details hidden';
+                    const list = document.createElement('div');
+                    list.className = 'artifact-list';
+
+                    const entries = [];
+                    if (report.audio_url) {
+                        entries.push({
+                            label: 'Audio original',
+                            url: report.audio_url,
+                            meta: '',
+                            exists: true
+                        });
+                    }
+                    const artifacts = Array.isArray(report.artifacts) ? report.artifacts : [];
+                    artifacts.forEach((artifact) => {
+                        if (!artifact || !artifact.path) return;
+                        const metaParts = [];
+                        if (artifact.category) metaParts.push(artifact.category);
+                        if (artifact.size) metaParts.push(this.formatBytes(artifact.size));
+                        if (artifact.mtime) {
+                            const formatted = this.formatDateTime(artifact.mtime);
+                            if (formatted) metaParts.push(formatted);
+                        }
+                        entries.push({
+                            label: artifact.name || artifact.path,
+                            url: artifact.download_url,
+                            meta: metaParts.join(' • '),
+                            exists: artifact.exists !== false
+                        });
+                    });
+
+                    if (!entries.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'artifact-meta';
+                        empty.textContent = 'Aucun fichier disponible.';
+                        list.appendChild(empty);
+                    } else {
+                        entries.forEach((entry) => {
+                            const row = document.createElement('div');
+                            row.className = 'artifact-item';
+
+                            const name = document.createElement('div');
+                            name.className = 'artifact-name';
+                            name.textContent = entry.label;
+                            row.appendChild(name);
+
+                            const metaInfo = document.createElement('div');
+                            metaInfo.className = 'artifact-meta';
+                            metaInfo.textContent = entry.meta || '';
+                            row.appendChild(metaInfo);
+
+                            const link = document.createElement('a');
+                            link.className = 'btn-mini';
+                            link.textContent = 'Télécharger';
+                            if (entry.url && entry.exists) {
+                                link.href = entry.url;
+                                link.setAttribute('download', '');
+                            } else {
+                                link.setAttribute('aria-disabled', 'true');
+                            }
+                            row.appendChild(link);
+
+                            list.appendChild(row);
+                        });
+                    }
+
+                    details.appendChild(list);
+                    item.appendChild(details);
+
+                    filesBtn.addEventListener('click', () => {
+                        const hidden = details.classList.toggle('hidden');
+                        filesBtn.textContent = hidden ? 'Fichiers' : 'Masquer';
+                    });
+
                     this.reportList.appendChild(item);
                 });
             }
@@ -1103,6 +1477,21 @@
                 const date = new Date(value);
                 if (Number.isNaN(date.getTime())) return '';
                 return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+            }
+
+            formatBytes(value) {
+                const bytes = Number(value);
+                if (!Number.isFinite(bytes)) return '';
+                if (bytes <= 0) return '0 o';
+                const units = ['o', 'Ko', 'Mo', 'Go'];
+                let idx = 0;
+                let size = bytes;
+                while (size >= 1024 && idx < units.length - 1) {
+                    size /= 1024;
+                    idx += 1;
+                }
+                const rounded = size >= 10 ? Math.round(size) : Math.round(size * 10) / 10;
+                return `${rounded} ${units[idx]}`;
             }
 
             formatDuration(seconds) {
