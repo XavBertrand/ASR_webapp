@@ -55,22 +55,66 @@
             z-index: 20;
         }
 
-        header {
-            padding: 14px 18px;
-            display: flex;
+        .user-menu-wrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; }
+        .user-trigger {
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            border-radius: 999px;
+            border: 1px solid rgba(34,211,238,0.6);
+            background: rgba(34,211,238,0.12);
+            color: var(--accent);
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            display: inline-flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            justify-content: center;
         }
-        .header-actions { display: flex; align-items: center; gap: 10px; }
-
-        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; color: var(--text-main); }
-        .brand img { width: 42px; height: 42px; object-fit: contain; border-radius: 10px; background: #1f2937; padding: 8px; }
-        .brand small { display: block; font-weight: 500; color: var(--text-sub); }
-
-        .lang { padding: 6px 12px; border-radius: 14px; border: 1px solid var(--stroke); color: var(--text-main); background: #111827; font-weight: 600; }
-        .admin-link { display: none; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--primary); color: var(--primary); text-decoration: none; font-weight: 700; background: rgba(59,130,246,0.12); }
-        .logout-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--stroke); background: #111827; color: var(--text-main); font-weight: 700; cursor: pointer; }
+        .user-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .user-trigger.is-open { box-shadow: 0 0 0 2px rgba(34,211,238,0.2); }
+        .user-initials { font-size: 0.95rem; }
+        .user-trigger .icon { display: none; }
+        .user-menu-wrap[data-role="admin"] .user-trigger .icon { display: inline-block; }
+        .user-menu-wrap[data-role="admin"] .user-trigger .user-initials { display: none; }
+        .user-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            min-width: 160px;
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 6px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            z-index: 30;
+        }
+        .user-menu[hidden] { display: none; }
+        .user-menu-item {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .user-menu-item:hover { border-color: var(--accent); color: var(--accent); }
+        .user-menu-link {
+            display: none;
+            border-color: rgba(59,130,246,0.45);
+            background: rgba(59,130,246,0.12);
+            color: var(--primary);
+        }
+        .user-menu-wrap[data-role="admin"] .user-menu-link { display: inline-flex; }
+        .user-menu-link:hover { border-color: var(--primary); color: var(--primary-strong); }
+        .user-logout:hover { border-color: var(--error); color: var(--error); }
         .icon {
             width: 20px;
             height: 20px;
@@ -83,20 +127,28 @@
             stroke-linejoin: round;
             flex-shrink: 0;
         }
-        .logout-btn .icon { width: 20px; height: 20px; }
+        .icon[hidden] { display: none; }
 
         .tabbar {
             border-top: 1px solid var(--stroke);
             border-bottom: 1px solid var(--stroke);
             background: rgba(11,18,32,0.9);
         }
-        .tablist {
+        .tabbar-inner {
             display: flex;
+            align-items: center;
             gap: 6px;
             padding: 8px 14px;
             max-width: 960px;
             margin: 0 auto;
             width: 100%;
+        }
+        .tablist {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1 1 auto;
+            min-width: 0;
             flex-wrap: wrap;
         }
         .tab {
@@ -425,15 +477,13 @@
         .artifact-meta { font-size: 0.75rem; color: var(--text-sub); }
 
         @media (max-width: 640px) {
-            header { flex-wrap: wrap; align-items: flex-start; }
-            .header-actions { flex-wrap: wrap; min-width: 0; justify-content: flex-start; }
             main.page {
                 padding-top: 14px;
                 padding-left: 14px;
                 padding-right: 14px;
                 /* padding-bottom preserved via calc(...) DO NOT OVERRIDE PADDING-BOTTOM */
             }
-            .tablist { padding: 6px 10px; }
+            .tabbar-inner { padding: 6px 10px; }
             .tab {
                 padding: 8px 6px;
                 gap: 6px;
@@ -512,6 +562,9 @@
         <line x1="12" y1="9" x2="12" y2="13"></line>
         <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"></circle>
     </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24">
+        <path d="M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6l7-3z"></path>
+    </symbol>
     <symbol id="icon-stop" viewBox="0 0 24 24">
         <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"></rect>
     </symbol>
@@ -535,34 +588,29 @@
 </svg>
 <div class="app">
     <div class="masthead">
-        <header>
-            <div class="brand">
-                <img src="logo.png" alt="Logo">
-                <div>
-                    <div>Action Avocats</div>
-                    <small>Enregistreur ASR</small>
-                </div>
-            </div>
-            <div class="header-actions">
-                <a id="admin-link" class="admin-link" href="/admin/users">Administration</a>
-                <button class="logout-btn" id="logoutBtn" title="Déconnexion">
-                    <svg class="icon" aria-hidden="true"><use href="#icon-logout"></use></svg>
-                    <span>Déconnexion</span>
-                </button>
-                <div class="lang">FR</div>
-            </div>
-        </header>
         <div class="tabbar">
-            <div class="tablist" role="tablist" aria-label="Navigation principale">
-                <button class="tab" id="tabRecord" data-tab="record" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
-                    <svg class="icon" aria-hidden="true"><use href="#icon-mic"></use></svg> Enregistrement
-                </button>
-                <button class="tab" id="tabMeta" data-tab="meta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
-                    <svg class="icon" aria-hidden="true"><use href="#icon-description"></use></svg> Informations
-                </button>
-                <button class="tab" id="tabHistory" data-tab="history" role="tab" aria-selected="false" aria-controls="panelHistory" tabindex="-1">
-                    <svg class="icon" aria-hidden="true"><use href="#icon-history"></use></svg> Historique
-                </button>
+            <div class="tabbar-inner">
+                <div class="tablist" role="tablist" aria-label="Navigation principale">
+                    <button class="tab" id="tabRecord" data-tab="record" role="tab" aria-selected="true" aria-controls="panelRecord" tabindex="0">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-mic"></use></svg> Enregistrement
+                    </button>
+                    <button class="tab" id="tabMeta" data-tab="meta" role="tab" aria-selected="false" aria-controls="panelMeta" tabindex="-1">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-description"></use></svg> Informations
+                    </button>
+                    <button class="tab" id="tabHistory" data-tab="history" role="tab" aria-selected="false" aria-controls="panelHistory" tabindex="-1">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-history"></use></svg> Historique
+                    </button>
+                </div>
+                <div class="user-menu-wrap">
+                    <button class="user-trigger" id="userMenuToggle" type="button" aria-haspopup="menu" aria-expanded="false" title="Compte">
+                        <span class="user-initials" id="userInitials">U</span>
+                        <svg class="icon" id="userShield" aria-hidden="true"><use href="#icon-shield"></use></svg>
+                    </button>
+                    <div class="user-menu" id="userMenu" role="menu" hidden>
+                        <a class="user-menu-item user-menu-link" id="adminMenuLink" href="/admin/users" role="menuitem">Administration</a>
+                        <button class="user-menu-item user-logout" id="logoutBtn" type="button" role="menuitem">Déconnexion</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -2071,21 +2119,69 @@
             }
         }
 
-        async function setupAdminLink() {
+        function computeInitials(name, role) {
+            if (role === 'admin') return 'A';
+            if (!name) return '?';
+            const trimmed = name.trim();
+            if (!trimmed) return '?';
+            const parts = trimmed.split(/[\\s_-]+/).filter(Boolean);
+            if (parts.length >= 2) {
+                return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+            }
+            return parts[0][0].toUpperCase();
+        }
+
+        async function setupCurrentUser() {
             try {
                 const res = await fetch('/api/me', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const data = await res.json();
-                if (data.role === 'admin') {
-                    const link = document.getElementById('admin-link');
-                    if (link) {
-                        link.style.display = 'inline-flex';
-                        link.href = '/admin/users';
-                    }
+                const initials = computeInitials(data.username, data.role);
+                const initialsEl = document.getElementById('userInitials');
+                if (initialsEl) initialsEl.textContent = initials;
+                const toggle = document.getElementById('userMenuToggle');
+                if (toggle) {
+                    const label = data.username ? `Compte ${data.username}` : 'Compte';
+                    toggle.setAttribute('aria-label', label);
+                    toggle.setAttribute('title', label);
                 }
+                const menuWrap = document.querySelector('.user-menu-wrap');
+                if (menuWrap) menuWrap.dataset.role = data.role || 'user';
             } catch (err) {
-                console.debug('Admin link check failed', err);
+                console.debug('Current user check failed', err);
             }
+        }
+
+        function setupUserMenu() {
+            const toggle = document.getElementById('userMenuToggle');
+            const menu = document.getElementById('userMenu');
+            if (!toggle || !menu) return;
+            const openMenu = () => {
+                menu.hidden = false;
+                toggle.setAttribute('aria-expanded', 'true');
+                toggle.classList.add('is-open');
+            };
+            const closeMenu = () => {
+                menu.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.classList.remove('is-open');
+            };
+            toggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (menu.hidden) {
+                    openMenu();
+                } else {
+                    closeMenu();
+                }
+            });
+            document.addEventListener('click', (event) => {
+                if (menu.hidden) return;
+                if (menu.contains(event.target) || toggle.contains(event.target)) return;
+                closeMenu();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') closeMenu();
+            });
         }
 
         function readCsrfCookie() {
@@ -2109,7 +2205,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            setupAdminLink();
+            setupCurrentUser();
+            setupUserMenu();
             new RecorderApp();
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
