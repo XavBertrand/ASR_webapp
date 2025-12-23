@@ -179,6 +179,7 @@
         }
         .panel.show { opacity: 1; }
         .panel-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-weight: 600; color: var(--text-sub); }
+        .panel-actions { display: flex; align-items: center; gap: 8px; }
         .pill { padding: 4px 10px; border-radius: 999px; background: #1f2937; color: var(--text-main); font-size: 0.8rem; }
         .muted { color: var(--text-sub); font-size: 0.95rem; margin-top: 10px; }
 
@@ -660,8 +661,11 @@
             <div class="content">
                 <div class="panel history-panel">
                     <div class="panel-head">
-                        <span>Historique des rapports</span>
-                        <button class="link-btn" id="refreshReports">Actualiser</button>
+                        <span id="historyTitle">Historique des rapports</span>
+                        <div class="panel-actions">
+                            <button class="link-btn" id="toggleTrash">Corbeille</button>
+                            <button class="link-btn" id="refreshReports">Actualiser</button>
+                        </div>
                     </div>
                     <div class="muted" id="reportsHint">Les rapports apparaissent ici dès l'envoi.</div>
                     <div class="history-list" id="reportList"></div>
@@ -736,8 +740,10 @@
                 this.insetRaf = null;
                 this.reportPollId = null;
                 this.reportTypeLabels = {};
+                this.showTrash = false;
 
                 this.initElements();
+                this.updateHistoryHeader();
                 this.initReportTypesFromSelect();
                 this.bindEvents();
                 this.setupTabsA11y(); // TABS A11Y
@@ -813,6 +819,8 @@
                 this.reportError = document.getElementById('reportError');
                 this.reportsHint = document.getElementById('reportsHint');
                 this.refreshReportsBtn = document.getElementById('refreshReports');
+                this.toggleTrashBtn = document.getElementById('toggleTrash');
+                this.historyTitle = document.getElementById('historyTitle');
 
                 // Metadata
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
@@ -848,7 +856,10 @@
                 });
 
                 if (this.refreshReportsBtn) {
-                    this.refreshReportsBtn.addEventListener('click', () => this.loadReports());
+                    this.refreshReportsBtn.addEventListener('click', () => this.loadHistory());
+                }
+                if (this.toggleTrashBtn) {
+                    this.toggleTrashBtn.addEventListener('click', () => this.toggleTrashView());
                 }
 
                 // Metadata persistence
@@ -955,7 +966,8 @@
                     this.mainPage.scrollTo({ top: 0, behavior: 'smooth' }); // TAB SWITCH SCROLL
                 }
                 if (tab === 'history') {
-                    this.loadReports();
+                    this.updateHistoryHeader();
+                    this.loadHistory();
                     this.startReportPolling();
                 } else {
                     this.stopReportPolling();
@@ -1053,7 +1065,7 @@
                 if (this.reportPollId) return;
                 this.reportPollId = setInterval(() => {
                     if (this.activeTab === 'history') {
-                        this.loadReports({ silent: true });
+                        this.loadHistory({ silent: true });
                     }
                 }, 15000);
             }
@@ -1062,6 +1074,31 @@
                 if (!this.reportPollId) return;
                 clearInterval(this.reportPollId);
                 this.reportPollId = null;
+            }
+
+            updateHistoryHeader() {
+                if (this.historyTitle) {
+                    this.historyTitle.textContent = this.showTrash ? 'Corbeille' : 'Historique des rapports';
+                }
+                if (this.toggleTrashBtn) {
+                    this.toggleTrashBtn.textContent = this.showTrash ? 'Historique' : 'Corbeille';
+                }
+                if (this.reportEmpty) {
+                    this.reportEmpty.textContent = this.showTrash ? 'Corbeille vide.' : "Aucun rapport pour l'instant.";
+                }
+            }
+
+            toggleTrashView() {
+                this.showTrash = !this.showTrash;
+                this.updateHistoryHeader();
+                this.loadHistory();
+            }
+
+            loadHistory(options = {}) {
+                if (this.showTrash) {
+                    return this.loadTrash(options);
+                }
+                return this.loadReports(options);
             }
 
             async loadReports(options = {}) {
@@ -1095,6 +1132,37 @@
                 }
             }
 
+            async loadTrash(options = {}) {
+                if (!this.reportList) return;
+                const silent = Boolean(options.silent);
+                if (!silent && this.reportsHint) {
+                    this.reportsHint.textContent = "Chargement de la corbeille...";
+                }
+                if (this.reportError) this.reportError.classList.add('hidden');
+                try {
+                    const res = await fetch(this.buildUrl('/api/trash'), { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Erreur serveur: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    this.renderReports(Array.isArray(data) ? data : []);
+                    if (this.reportsHint && !silent) {
+                        const stamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        this.reportsHint.textContent = `Dernière mise à jour: ${stamp}`;
+                    }
+                } catch (err) {
+                    if (this.reportError) this.reportError.classList.remove('hidden');
+                    if (this.reportEmpty) this.reportEmpty.classList.add('hidden');
+                    if (this.reportsHint) {
+                        this.reportsHint.textContent = "Impossible de charger la corbeille.";
+                    }
+                }
+            }
+
             async trashRun(runId) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
@@ -1110,9 +1178,51 @@
                         alert(message);
                         return;
                     }
-                    await this.loadReports({ silent: true });
+                    await this.loadHistory({ silent: true });
                 } catch (err) {
                     alert("Impossible de déplacer vers la corbeille.");
+                }
+            }
+
+            async restoreRun(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/restore`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Restauration impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de restaurer ce run.");
+                }
+            }
+
+            async deleteRunPermanently(runId) {
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/delete`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de supprimer définitivement ce run.");
                 }
             }
 
@@ -1131,7 +1241,8 @@
                     queued: { label: 'En file', className: 'status-queued' },
                     pending: { label: 'En attente', className: 'status-queued' },
                     failed: { label: 'Échec', className: 'status-failed' },
-                    missing: { label: 'Rapport indisponible', className: 'status-missing' }
+                    missing: { label: 'Rapport indisponible', className: 'status-missing' },
+                    trashed: { label: 'Corbeille', className: 'status-missing' }
                 };
 
                 reports.forEach((report) => {
@@ -1156,6 +1267,10 @@
                     if (report.meeting_report_type) {
                         metaParts.push(this.reportTypeLabels[report.meeting_report_type] || report.meeting_report_type);
                     }
+                    if (this.showTrash && report.trashed_at) {
+                        const trashedLabel = this.formatDateTime(report.trashed_at);
+                        if (trashedLabel) metaParts.push(`Supprimé le ${trashedLabel}`);
+                    }
                     const createdAt = report.report_created_at || report.uploaded_at;
                     if (createdAt) {
                         const formatted = this.formatDateTime(createdAt);
@@ -1175,7 +1290,7 @@
                     const download = document.createElement('a');
                     download.className = 'btn-mini';
                     download.textContent = 'PDF';
-                    if (report.download_url) {
+                    if (!this.showTrash && report.download_url) {
                         download.href = report.download_url;
                         download.setAttribute('download', '');
                     } else {
@@ -1189,17 +1304,44 @@
                     filesBtn.textContent = 'Fichiers';
                     actions.appendChild(filesBtn);
 
-                    const trashBtn = document.createElement('button');
-                    trashBtn.className = 'btn-mini btn-danger';
-                    trashBtn.type = 'button';
-                    trashBtn.textContent = 'Corbeille';
-                    trashBtn.addEventListener('click', () => {
-                        const id = report.run_id || report.id;
-                        if (!id) return;
-                        if (!confirm('Déplacer ce run vers la corbeille ?')) return;
-                        this.trashRun(id);
-                    });
-                    actions.appendChild(trashBtn);
+                    if (this.showTrash) {
+                        const restoreBtn = document.createElement('button');
+                        restoreBtn.className = 'btn-mini';
+                        restoreBtn.type = 'button';
+                        restoreBtn.textContent = 'Restaurer';
+                        restoreBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Restaurer ce run depuis la corbeille ?')) return;
+                            this.restoreRun(id);
+                        });
+                        actions.appendChild(restoreBtn);
+
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn-mini btn-danger';
+                        deleteBtn.type = 'button';
+                        deleteBtn.textContent = 'Supprimer';
+                        deleteBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Supprimer définitivement ce run ?')) return;
+                            if (!confirm('Cette action est irréversible. Confirmer ?')) return;
+                            this.deleteRunPermanently(id);
+                        });
+                        actions.appendChild(deleteBtn);
+                    } else {
+                        const trashBtn = document.createElement('button');
+                        trashBtn.className = 'btn-mini btn-danger';
+                        trashBtn.type = 'button';
+                        trashBtn.textContent = 'Corbeille';
+                        trashBtn.addEventListener('click', () => {
+                            const id = report.run_id || report.id;
+                            if (!id) return;
+                            if (!confirm('Déplacer ce run vers la corbeille ?')) return;
+                            this.trashRun(id);
+                        });
+                        actions.appendChild(trashBtn);
+                    }
 
                     const header = document.createElement('div');
                     header.className = 'history-header';
