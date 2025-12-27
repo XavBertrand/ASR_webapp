@@ -299,6 +299,34 @@ def _update_run_metadata(run_root: Path, *, user_folder: str, old_run_id: str, n
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _set_run_case_name(run_root: Path, case_name: str | None) -> None:
+    normalized = (case_name or "").strip()
+    case_value = normalized or None
+
+    manifest_path = run_root / "manifest.json"
+    manifest = _load_manifest(manifest_path) if manifest_path.exists() else None
+    if isinstance(manifest, dict):
+        meta = manifest.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+        if case_value:
+            meta["case_name"] = case_value
+        else:
+            meta.pop("case_name", None)
+        manifest["meta"] = meta
+        manifest["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    meta_path = run_root / "meta.json"
+    meta = _load_meta(meta_path) if meta_path.exists() else None
+    if isinstance(meta, dict):
+        if case_value:
+            meta["case_name"] = case_value
+        else:
+            meta.pop("case_name", None)
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _collect_run_entries(
     runs_root: Path,
     root: Path,
@@ -319,6 +347,8 @@ def _collect_run_entries(
         meta = manifest.get("meta") or {}
         audio = manifest.get("audio") or {}
         artifacts = manifest.get("artifacts") or []
+        raw_case_name = meta.get("case_name")
+        case_name = raw_case_name.strip() if isinstance(raw_case_name, str) else ""
 
         artifact_entries: list[dict[str, Any]] = []
         pdf_entry: dict[str, Any] | None = None
@@ -383,9 +413,11 @@ def _collect_run_entries(
             {
                 "id": run_id,
                 "run_id": run_id,
-                "display_name": audio.get("original_filename")
+                "display_name": case_name
+                or audio.get("original_filename")
                 or audio.get("saved_filename")
                 or run_id,
+                "case_name": case_name or None,
                 "meeting_date": meta.get("meeting_date"),
                 "meeting_report_type": meta.get("meeting_report_type"),
                 "uploaded_at": created_at,
@@ -1200,6 +1232,23 @@ def register_routes(app: Flask) -> None:
         )
         return jsonify(items)
 
+    @app.post("/api/runs/<run_id>/rename")
+    @login_required
+    def rename_run(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        payload = request.get_json(silent=True) or request.form or {}
+        case_name = (payload.get("case_name") or "").strip()
+        if len(case_name) > 160:
+            return json_error("Nom du dossier trop long (max 160 caractères)", 400)
+        user_folder = current_user_folder()
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        run_root = root / user_folder / "runs" / run_id
+        if not run_root.is_dir():
+            return json_error("Run introuvable", 404)
+        _set_run_case_name(run_root, case_name or None)
+        return jsonify({"ok": True, "case_name": case_name})
+
     @app.get("/api/meeting-report-types")
     @login_required
     def meeting_report_types():
@@ -1603,11 +1652,15 @@ def extract_metadata(req_form) -> dict:
 
     asr_prompt = (req_form.get("asr_prompt") or default_prompt).strip()
     speaker_context = (req_form.get("speaker_context") or "").strip()
+    case_name = (req_form.get("case_name") or "").strip()
+    if len(case_name) > 160:
+        raise ValueError("Nom du dossier trop long (max 160 caractères)")
     meeting_date = normalize_meeting_date(req_form.get("meeting_date"))
 
     return {
         "asr_prompt": asr_prompt,
         "speaker_context": speaker_context,
+        "case_name": case_name,
         "meeting_date": meeting_date,
         "meeting_report_type": meeting_report_type,
     }
