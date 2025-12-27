@@ -1577,6 +1577,21 @@
                 return raw || 'webm';
             }
 
+            inferMimeTypeFromName(filename) {
+                const name = (filename || '').toLowerCase();
+                const ext = name.includes('.') ? name.split('.').pop() : '';
+                const map = {
+                    webm: 'audio/webm',
+                    wav: 'audio/wav',
+                    mp3: 'audio/mpeg',
+                    ogg: 'audio/ogg',
+                    m4a: 'audio/mp4',
+                    mp4: 'video/mp4',
+                    aac: 'audio/aac'
+                };
+                return map[ext] || '';
+            }
+
             prefillFormValues() {
                 if (this.inputAsrPrompt && !this.inputAsrPrompt.value) {
                     this.inputAsrPrompt.value = this.defaultAsrPrompt;
@@ -1713,16 +1728,35 @@
             loadExternalFile(file) {
                 if (!file) return;
                 this.resetInterface(true);
-                this.audioBlob = file;
+                const inferredType = file.type || this.inferMimeTypeFromName(file.name);
+                const canPlay = (file.type && this.audioPlayer)
+                    ? this.audioPlayer.canPlayType(file.type)
+                    : '';
+                if (inferredType && (!file.type || !canPlay)) {
+                    this.audioBlob = new Blob([file], { type: inferredType });
+                } else {
+                    this.audioBlob = file;
+                }
                 this.audioDurationSec = null;
                 this.currentFileName = file.name || '';
-                this.mimeType = file.type || 'audio/webm';
+                this.mimeType = inferredType || file.type || 'audio/webm';
 
-                const objectUrl = URL.createObjectURL(file);
+                const objectUrl = URL.createObjectURL(this.audioBlob);
                 this.audioPlayer.src = objectUrl;
                 this.audioPlayer.classList.add('show');
-                this.previewEmpty.style.display = 'none';
+                if (this.previewEmpty) {
+                    const label = this.currentFileName || 'Fichier audio';
+                    this.previewEmpty.textContent = `Fichier chargé : ${label}`;
+                    this.previewEmpty.style.display = 'block';
+                }
                 this.audioPreview.classList.add('show');
+                this.audioPlayer.load();
+
+                this.audioPlayer.onerror = () => {
+                    if (!this.previewEmpty) return;
+                    const label = this.currentFileName || 'Fichier audio';
+                    this.previewEmpty.textContent = `${label} chargé. Prévisualisation indisponible pour ce format.`;
+                };
 
                 const setDuration = () => {
                     if (isFinite(this.audioPlayer.duration)) {
@@ -2070,6 +2104,7 @@
                 this.audioPlayer.onloadedmetadata = null;
                 this.audioPlayer.src = '';
                 this.audioPlayer.classList.remove('show');
+                this.previewEmpty.textContent = "En attente d'un enregistrement.";
                 this.previewEmpty.style.display = 'block';
 
                 this.progressBar.style.width = '0%';
