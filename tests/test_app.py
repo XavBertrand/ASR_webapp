@@ -1,3 +1,4 @@
+import builtins
 import io
 import json
 import logging
@@ -71,6 +72,15 @@ def extract_token_from_logs(caplog):
             match = re.search(r"/reset-password/([A-Za-z0-9_\-]+)", record.message)
             if match:
                 return match.group(1)
+    return None
+
+
+def extract_reset_url_from_logs(caplog):
+    for record in caplog.records:
+        if "PASSWORD RESET LINK" in record.message:
+            match = re.search(r"https?://\\S+", record.message)
+            if match:
+                return match.group(0)
     return None
 
 
@@ -336,6 +346,43 @@ def test_ratelimit_storage_env(monkeypatch, tmp_path):
     assert getattr(limiter, "_storage", None) is not None
 
 
+def test_ratelimit_memory_warning_in_production(tmp_path, monkeypatch, caplog):
+    extra_env = {"WEBAPP_ENV": "production", "RATELIMIT_STORAGE_URL": "memory://"}
+    with caplog.at_level(logging.WARNING):
+        build_app(tmp_path, monkeypatch, extra_env=extra_env)
+    assert any("Limiter not shared across workers" in record.message for record in caplog.records)
+
+
+def test_ratelimit_redis_fallback_without_client(tmp_path, monkeypatch, caplog):
+    original_import = builtins.__import__
+
+    def blocked_import(name, *args, **kwargs):
+        if name == "redis":
+            raise ImportError("redis blocked for test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_import)
+    extra_env = {"RATELIMIT_STORAGE_URL": "redis://localhost:6379/0"}
+    with caplog.at_level(logging.WARNING):
+        app = build_app(tmp_path, monkeypatch, extra_env=extra_env)
+    assert app.config["RATELIMIT_STORAGE_URL"] == "memory://"
+    assert any("Limiter backend" in record.message for record in caplog.records)
+
+
+def test_secret_key_required_when_not_testing(tmp_path, monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("ASR_WEBAPP_SKIP_AUTOAPP", "1")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app(
+            {
+                "TESTING": False,
+                "SKIP_BOOTSTRAP_ADMIN": True,
+                "SQLALCHEMY_DATABASE_URI": "sqlite://",
+                "UPLOAD_FOLDER": str(tmp_path / "uploads"),
+            }
+        )
+
+
 def test_security_headers_present(client):
     resp = client.get("/login")
     csp = resp.headers.get("Content-Security-Policy")
@@ -344,6 +391,49 @@ def test_security_headers_present(client):
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
     assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+
+
+def test_secure_cookie_attributes_when_enabled(tmp_path, monkeypatch):
+    app = build_app(tmp_path, monkeypatch, config={"SESSION_COOKIE_SECURE": True})
+    client = app.test_client()
+    resp = client.get("/login")
+    cookies = resp.headers.getlist("Set-Cookie")
+    session_cookie = next((cookie for cookie in cookies if cookie.startswith("session=")), "")
+    csrf_cookie = next((cookie for cookie in cookies if cookie.startswith("csrf_token=")), "")
+    assert session_cookie
+    assert "Secure" in session_cookie
+    assert "HttpOnly" in session_cookie
+    assert "SameSite=Lax" in session_cookie
+    assert csrf_cookie
+    assert "Secure" in csrf_cookie
+    assert "SameSite=Lax" in csrf_cookie
+    assert "HttpOnly" not in csrf_cookie
+
+
+def test_reset_url_uses_https_with_proxy_headers(tmp_path, monkeypatch, caplog):
+    monkeypatch.delenv("MAIL_HOST", raising=False)
+    app = build_app(tmp_path, monkeypatch, extra_env={"TRUST_PROXY_HEADERS": "true"})
+    with app.app_context():
+        user = User(
+            username="proxyuser",
+            email="proxy@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+    client = app.test_client()
+    with caplog.at_level(logging.WARNING):
+        csrf = set_csrf(client)
+        resp = client.post(
+            "/forgot-password",
+            data={"identifier": "proxy@example.com", "csrf_token": csrf},
+            headers={"X-Forwarded-Proto": "https", "Host": "example.test"},
+        )
+    assert resp.status_code == 200
+    reset_url = extract_reset_url_from_logs(caplog)
+    assert reset_url and reset_url.startswith("https://example.test/")
 
 
 def test_forgot_password_unknown_identifier_no_token(client, app):
