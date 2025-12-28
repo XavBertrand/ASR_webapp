@@ -10,6 +10,7 @@ from pathlib import Path
 import pyotp
 import pytest
 
+import server.app as app_module
 from server.app import client_ip, create_app, hash_reset_token
 from server.models import AuditLog, PasswordResetToken, RecoveryCode, User, db
 from server.security import hash_password, verify_password
@@ -72,15 +73,6 @@ def extract_token_from_logs(caplog):
             match = re.search(r"/reset-password/([A-Za-z0-9_\-]+)", record.message)
             if match:
                 return match.group(1)
-    return None
-
-
-def extract_reset_url_from_logs(caplog):
-    for record in caplog.records:
-        if "PASSWORD RESET LINK" in record.message:
-            match = re.search(r"https?://\\S+", record.message)
-            if match:
-                return match.group(0)
     return None
 
 
@@ -410,8 +402,15 @@ def test_secure_cookie_attributes_when_enabled(tmp_path, monkeypatch):
     assert "HttpOnly" not in csrf_cookie
 
 
-def test_reset_url_uses_https_with_proxy_headers(tmp_path, monkeypatch, caplog):
+def test_reset_url_uses_https_with_proxy_headers(tmp_path, monkeypatch):
     monkeypatch.delenv("MAIL_HOST", raising=False)
+    captured = {}
+
+    def fake_send_password_reset_email(app, user, reset_url):
+        captured["url"] = reset_url
+        return "log"
+
+    monkeypatch.setattr(app_module, "send_password_reset_email", fake_send_password_reset_email)
     app = build_app(tmp_path, monkeypatch, extra_env={"TRUST_PROXY_HEADERS": "true"})
     with app.app_context():
         user = User(
@@ -424,15 +423,18 @@ def test_reset_url_uses_https_with_proxy_headers(tmp_path, monkeypatch, caplog):
         db.session.add(user)
         db.session.commit()
     client = app.test_client()
-    with caplog.at_level(logging.WARNING):
-        csrf = set_csrf(client)
-        resp = client.post(
-            "/forgot-password",
-            data={"identifier": "proxy@example.com", "csrf_token": csrf},
-            headers={"X-Forwarded-Proto": "https", "Host": "example.test"},
-        )
+    base_url = "http://example.test"
+    with client.session_transaction(base_url=base_url) as sess:
+        sess["csrf_token"] = "csrf-test"
+        csrf = sess["csrf_token"]
+    resp = client.post(
+        "/forgot-password",
+        data={"identifier": "proxy@example.com", "csrf_token": csrf},
+        headers={"X-Forwarded-Proto": "https"},
+        base_url=base_url,
+    )
     assert resp.status_code == 200
-    reset_url = extract_reset_url_from_logs(caplog)
+    reset_url = captured.get("url")
     assert reset_url and reset_url.startswith("https://example.test/")
 
 
