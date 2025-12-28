@@ -101,6 +101,13 @@ def test_health_public(client):
     assert resp.get_json() == {"status": "ok"}
 
 
+def test_permissions_policy_allows_microphone(client):
+    resp = client.get("/health")
+    header = resp.headers.get("Permissions-Policy")
+    assert header is not None
+    assert "microphone=(self)" in header
+
+
 def test_login_success_and_fail_and_rate_limit(client, app):
     # success
     ok = login(client, "admin", "SuperSecureAdmin!")
@@ -384,7 +391,7 @@ def test_security_headers_present(client):
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
-    assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+    assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(self), camera=()"
 
 
 def test_secure_cookie_attributes_when_enabled(tmp_path, monkeypatch):
