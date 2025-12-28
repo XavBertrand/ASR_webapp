@@ -391,7 +391,7 @@ def test_security_headers_present(client):
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
-    assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+    assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(self), camera=()"
 
 
 def test_secure_cookie_attributes_when_enabled(tmp_path, monkeypatch):
