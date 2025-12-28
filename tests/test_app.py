@@ -101,6 +101,13 @@ def test_health_public(client):
     assert resp.get_json() == {"status": "ok"}
 
 
+def test_permissions_policy_allows_microphone(client):
+    resp = client.get("/health")
+    header = resp.headers.get("Permissions-Policy")
+    assert header is not None
+    assert "microphone=(self)" in header
+
+
 def test_login_success_and_fail_and_rate_limit(client, app):
     # success
     ok = login(client, "admin", "SuperSecureAdmin!")
