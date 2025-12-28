@@ -10,7 +10,9 @@ from pathlib import Path
 import pyotp
 import pytest
 
-import server.app as app_module
+import importlib
+
+app_module = importlib.import_module("server.app")
 from server.app import client_ip, create_app, hash_reset_token
 from server.models import AuditLog, PasswordResetToken, RecoveryCode, User, db
 from server.security import hash_password, verify_password
