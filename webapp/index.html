@@ -1799,7 +1799,7 @@
                         audio: { sampleRate: 44100, channelCount: 1, volume: 1.0 }
                     });
 
-                    this.setupAudioGraph();
+                    await this.setupAudioGraph();
 
                     const options = { mimeType: 'audio/webm;codecs=opus' };
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
@@ -1827,6 +1827,7 @@
 
                     this.updateStatus('Enregistrement en cours', 'recording');
                     this.startTimer();
+                    this.resizeCanvas();
                     this.drawVisualizer();
                     this.updateUI();
                 } catch (error) {
@@ -1888,11 +1889,18 @@
                 this.updateUI();
             }
 
-            setupAudioGraph() {
+            async setupAudioGraph() {
                 if (this.audioCtx && this.audioCtx.state !== 'closed') {
                     this.audioCtx.close();
                 }
                 this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.audioCtx.state === 'suspended') {
+                    try {
+                        await this.audioCtx.resume();
+                    } catch (err) {
+                        console.warn('AudioContext resume failed:', err);
+                    }
+                }
                 this.analyser = this.audioCtx.createAnalyser();
                 const microphone = this.audioCtx.createMediaStreamSource(this.stream);
                 microphone.connect(this.analyser);
@@ -2092,13 +2100,19 @@
             drawVisualizer() {
                 if (!this.analyser) return;
                 cancelAnimationFrame(this.animationId);
-
-                const width = this.canvas.width;
-                const height = this.canvas.height;
-                const centerY = height / 2;
+                if (!this.canvasCtx) {
+                    this.canvasCtx = this.canvas.getContext('2d');
+                }
 
                 const animate = () => {
                     if (this.state !== 'recording') return;
+
+                    if (this.canvas.width === 0 || this.canvas.height === 0) {
+                        this.resizeCanvas();
+                    }
+                    const width = this.canvas.width;
+                    const height = this.canvas.height;
+                    const centerY = height / 2;
 
                     this.analyser.getByteFrequencyData(this.dataArray);
                     let sum = 0;
