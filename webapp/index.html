@@ -701,6 +701,11 @@
                         <span id="metaWarningText">Champs requis manquants.</span>
                     </div>
                     <div class="form-grid">
+                        <div class="field" id="fieldCaseName">
+                            <label for="inputCaseName">Nom du dossier</label>
+                            <input type="text" id="inputCaseName" maxlength="160" placeholder="Ex: Affaire Dupont - licenciement" />
+                            <small>Optionnel, sert de titre principal dans l'historique.</small>
+                        </div>
                         <div class="field" id="fieldAsrPrompt">
                             <label for="inputAsrPrompt">Mots spécifiques</label>
                             <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
@@ -896,10 +901,12 @@
                 this.historyTitle = document.getElementById('historyTitle');
 
                 // Metadata
+                this.inputCaseName = document.getElementById('inputCaseName');
                 this.inputAsrPrompt = document.getElementById('inputAsrPrompt');
                 this.inputSpeakerContext = document.getElementById('inputSpeakerContext');
                 this.inputMeetingDate = document.getElementById('inputMeetingDate');
                 this.inputMeetingReportType = document.getElementById('inputMeetingReportType');
+                this.fieldCaseName = document.getElementById('fieldCaseName');
                 this.fieldMeetingDate = document.getElementById('fieldMeetingDate');
                 this.fieldMeetingReportType = document.getElementById('fieldMeetingReportType');
             }
@@ -937,6 +944,7 @@
 
                 // Metadata persistence
                 const metaInputs = [
+                    this.inputCaseName,
                     this.inputAsrPrompt,
                     this.inputSpeakerContext,
                     this.inputMeetingDate,
@@ -1056,6 +1064,7 @@
             restoreMetadata() {
                 const stored = this.loadFromLocalStorage(this.metaStorageKey, null);
                 if (stored) {
+                    if (this.inputCaseName) this.inputCaseName.value = stored.case_name || '';
                     if (this.inputAsrPrompt) this.inputAsrPrompt.value = stored.asr_prompt || '';
                     if (this.inputSpeakerContext) this.inputSpeakerContext.value = stored.speaker_context || '';
                     if (this.inputMeetingDate) this.inputMeetingDate.value = stored.meeting_date || '';
@@ -1327,8 +1336,7 @@
 
                     const title = document.createElement('div');
                     title.className = 'history-title';
-                    const rawName = report.display_name || report.report_filename || 'Rapport';
-                    title.textContent = rawName.replace(/_/g, ' ');
+                    title.textContent = this.buildReportTitle(report);
                     main.appendChild(title);
 
                     const meta = document.createElement('div');
@@ -1403,6 +1411,13 @@
                         });
                         actions.appendChild(deleteBtn);
                     } else {
+                        const renameBtn = document.createElement('button');
+                        renameBtn.className = 'btn-mini';
+                        renameBtn.type = 'button';
+                        renameBtn.textContent = 'Renommer';
+                        renameBtn.addEventListener('click', () => this.renameRun(report));
+                        actions.appendChild(renameBtn);
+
                         const trashBtn = document.createElement('button');
                         trashBtn.className = 'btn-mini btn-danger';
                         trashBtn.type = 'button';
@@ -1499,6 +1514,51 @@
 
                     this.reportList.appendChild(item);
                 });
+            }
+
+            buildReportTitle(report) {
+                if (!report) return 'Rapport';
+                const caseName = (report.case_name || '').trim();
+                if (caseName) return caseName;
+                const typeLabel = this.reportTypeLabels[report.meeting_report_type] || report.meeting_report_type || '';
+                const meetingDate = report.meeting_date || '';
+                const parts = [];
+                if (typeLabel) parts.push(typeLabel);
+                if (meetingDate) parts.push(meetingDate);
+                if (parts.length) return parts.join(' • ');
+                const fallback = report.display_name || report.report_filename || report.run_id || report.id || 'Rapport';
+                return String(fallback).replace(/_/g, ' ');
+            }
+
+            async renameRun(report) {
+                const runId = report?.run_id || report?.id;
+                if (!runId) return;
+                const current = (report.case_name || '').trim();
+                const nextName = prompt('Nom du dossier (laisser vide pour un titre automatique)', current);
+                if (nextName === null) return;
+                const caseName = nextName.trim();
+                if (caseName.length > 160) {
+                    alert('Nom du dossier trop long (max 160 caractères).');
+                    return;
+                }
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/rename`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ case_name: caseName })
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Renommage impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert('Impossible de renommer ce run.');
+                }
             }
 
             showMetaSaved() {
@@ -1614,6 +1674,7 @@
                 }
 
                 return {
+                    case_name: (this.inputCaseName?.value || '').trim(),
                     asr_prompt: (this.inputAsrPrompt?.value || '').trim() || this.defaultAsrPrompt,
                     speaker_context: (this.inputSpeakerContext?.value || '').trim(),
                     meeting_date: meetingDate,
@@ -1631,6 +1692,7 @@
 
                 this.fieldMeetingDate?.classList.toggle('field-error', !meta.meeting_date);
                 this.fieldMeetingReportType?.classList.toggle('field-error', !meta.meeting_report_type);
+                this.fieldCaseName?.classList.toggle('field-error', meta.case_name && meta.case_name.length > 160);
 
                 if (missing.length) {
                     this.showMetadataWarning(`Champs requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type de compte rendu').join(', ')}`);
@@ -1638,6 +1700,14 @@
                     const target = missing[0].el;
                     if (target) {
                         requestAnimationFrame(() => target.focus({ preventScroll: true }));
+                    }
+                    return { ok: false };
+                }
+                if (meta.case_name && meta.case_name.length > 160) {
+                    this.showMetadataWarning('Nom du dossier trop long (max 160 caractères).');
+                    this.setActiveTab('meta');
+                    if (this.inputCaseName) {
+                        requestAnimationFrame(() => this.inputCaseName.focus({ preventScroll: true }));
                     }
                     return { ok: false };
                 }
@@ -1652,6 +1722,7 @@
 
             clearMetadataWarning() {
                 if (this.metaWarning) this.metaWarning.classList.add('hidden');
+                this.fieldCaseName?.classList.remove('field-error');
                 this.fieldMeetingDate?.classList.remove('field-error');
                 this.fieldMeetingReportType?.classList.remove('field-error');
             }
@@ -1898,6 +1969,7 @@
                     formData.append('file', this.audioBlob, uploadName);
                     formData.append('timestamp', timestamp);
                     const metadata = validation.metadata;
+                    formData.append('case_name', metadata.case_name);
                     formData.append('asr_prompt', metadata.asr_prompt);
                     formData.append('speaker_context', metadata.speaker_context);
                     formData.append('meeting_date', metadata.meeting_date);
