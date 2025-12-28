@@ -1245,6 +1245,28 @@
                 }
             }
 
+            async rerunReport(report) {
+                const runId = report?.run_id || report?.id;
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/rerun-report`), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin'
+                    });
+                    if (!res.ok) {
+                        const payload = await res.json().catch(() => ({}));
+                        const message = payload.error || `Relance impossible (${res.status})`;
+                        alert(message);
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                } catch (err) {
+                    alert("Impossible de relancer le rapport.");
+                }
+            }
+
             async trashRun(runId) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
@@ -1378,6 +1400,23 @@
                         download.setAttribute('aria-disabled', 'true');
                     }
                     actions.appendChild(download);
+
+                    if (!this.showTrash) {
+                        const canRerun = report.status === 'ready';
+                        const rerunBtn = document.createElement('button');
+                        rerunBtn.className = 'btn-mini';
+                        rerunBtn.type = 'button';
+                        rerunBtn.textContent = 'Relancer';
+                        if (!canRerun) {
+                            rerunBtn.setAttribute('aria-disabled', 'true');
+                        }
+                        rerunBtn.addEventListener('click', () => {
+                            if (!canRerun) return;
+                            if (!confirm('Relancer la génération du rapport ?')) return;
+                            this.rerunReport(report);
+                        });
+                        actions.appendChild(rerunBtn);
+                    }
 
                     const filesBtn = document.createElement('button');
                     filesBtn.className = 'btn-mini';

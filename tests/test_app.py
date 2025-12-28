@@ -1,3 +1,4 @@
+import builtins
 import io
 import json
 import logging
@@ -9,6 +10,9 @@ from pathlib import Path
 import pyotp
 import pytest
 
+import importlib
+
+app_module = importlib.import_module("server.app")
 from server.app import client_ip, create_app, hash_reset_token
 from server.models import AuditLog, PasswordResetToken, RecoveryCode, User, db
 from server.security import hash_password, verify_password
@@ -336,6 +340,43 @@ def test_ratelimit_storage_env(monkeypatch, tmp_path):
     assert getattr(limiter, "_storage", None) is not None
 
 
+def test_ratelimit_memory_warning_in_production(tmp_path, monkeypatch, caplog):
+    extra_env = {"WEBAPP_ENV": "production", "RATELIMIT_STORAGE_URL": "memory://"}
+    with caplog.at_level(logging.WARNING):
+        build_app(tmp_path, monkeypatch, extra_env=extra_env)
+    assert any("Limiter not shared across workers" in record.message for record in caplog.records)
+
+
+def test_ratelimit_redis_fallback_without_client(tmp_path, monkeypatch, caplog):
+    original_import = builtins.__import__
+
+    def blocked_import(name, *args, **kwargs):
+        if name == "redis":
+            raise ImportError("redis blocked for test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_import)
+    extra_env = {"RATELIMIT_STORAGE_URL": "redis://localhost:6379/0"}
+    with caplog.at_level(logging.WARNING):
+        app = build_app(tmp_path, monkeypatch, extra_env=extra_env)
+    assert app.config["RATELIMIT_STORAGE_URL"] == "memory://"
+    assert any("Limiter backend" in record.message for record in caplog.records)
+
+
+def test_secret_key_required_when_not_testing(tmp_path, monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("ASR_WEBAPP_SKIP_AUTOAPP", "1")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app(
+            {
+                "TESTING": False,
+                "SKIP_BOOTSTRAP_ADMIN": True,
+                "SQLALCHEMY_DATABASE_URI": "sqlite://",
+                "UPLOAD_FOLDER": str(tmp_path / "uploads"),
+            }
+        )
+
+
 def test_security_headers_present(client):
     resp = client.get("/login")
     csp = resp.headers.get("Content-Security-Policy")
@@ -344,6 +385,59 @@ def test_security_headers_present(client):
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
     assert resp.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+
+
+def test_secure_cookie_attributes_when_enabled(tmp_path, monkeypatch):
+    app = build_app(tmp_path, monkeypatch, config={"SESSION_COOKIE_SECURE": True})
+    client = app.test_client()
+    resp = client.get("/login")
+    cookies = resp.headers.getlist("Set-Cookie")
+    session_cookie = next((cookie for cookie in cookies if cookie.startswith("session=")), "")
+    csrf_cookie = next((cookie for cookie in cookies if cookie.startswith("csrf_token=")), "")
+    assert session_cookie
+    assert "Secure" in session_cookie
+    assert "HttpOnly" in session_cookie
+    assert "SameSite=Lax" in session_cookie
+    assert csrf_cookie
+    assert "Secure" in csrf_cookie
+    assert "SameSite=Lax" in csrf_cookie
+    assert "HttpOnly" not in csrf_cookie
+
+
+def test_reset_url_uses_https_with_proxy_headers(tmp_path, monkeypatch):
+    monkeypatch.delenv("MAIL_HOST", raising=False)
+    captured = {}
+
+    def fake_send_password_reset_email(app, user, reset_url):
+        captured["url"] = reset_url
+        return "log"
+
+    monkeypatch.setattr(app_module, "send_password_reset_email", fake_send_password_reset_email)
+    app = build_app(tmp_path, monkeypatch, extra_env={"TRUST_PROXY_HEADERS": "true"})
+    with app.app_context():
+        user = User(
+            username="proxyuser",
+            email="proxy@example.com",
+            password_hash=hash_password("Password123"),
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+    client = app.test_client()
+    base_url = "http://example.test"
+    with client.session_transaction(base_url=base_url) as sess:
+        sess["csrf_token"] = "csrf-test"
+        csrf = sess["csrf_token"]
+    resp = client.post(
+        "/forgot-password",
+        data={"identifier": "proxy@example.com", "csrf_token": csrf},
+        headers={"X-Forwarded-Proto": "https"},
+        base_url=base_url,
+    )
+    assert resp.status_code == 200
+    reset_url = captured.get("url")
+    assert reset_url and reset_url.startswith("https://example.test/")
 
 
 def test_forgot_password_unknown_identifier_no_token(client, app):
