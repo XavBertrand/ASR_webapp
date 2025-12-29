@@ -8,7 +8,7 @@ import re
 import secrets
 import shutil
 import smtplib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
@@ -255,8 +255,20 @@ def run_path_allowed(user: User, fname: str) -> bool:
     return parts[0] == safe_username
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _coerce_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _iso_from_epoch(epoch: float) -> str:
-    return datetime.utcfromtimestamp(epoch).isoformat() + "Z"
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso_timestamp(value: str | None) -> float | None:
@@ -323,7 +335,7 @@ def _update_run_metadata(run_root: Path, *, user_folder: str, old_run_id: str, n
     if isinstance(manifest, dict):
         manifest["run_id"] = new_run_id
         manifest["run_root"] = new_root
-        manifest["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        manifest["updated_at"] = _utcnow().isoformat().replace("+00:00", "Z")
         artifacts = manifest.get("artifacts")
         if isinstance(artifacts, list) and old_root != new_root:
             for entry in artifacts:
@@ -358,7 +370,7 @@ def _set_run_case_name(run_root: Path, case_name: str | None) -> None:
         else:
             meta.pop("case_name", None)
         manifest["meta"] = meta
-        manifest["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        manifest["updated_at"] = _utcnow().isoformat().replace("+00:00", "Z")
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     meta_path = run_root / "meta.json"
@@ -807,7 +819,7 @@ def hash_reset_token(raw_token: str) -> str:
 
 def generate_password_reset_token(user: User, ip: str | None, ua: str | None, ttl_minutes: int) -> tuple[str, PasswordResetToken]:
     ttl = max(int(ttl_minutes), 1)
-    expires_at = datetime.utcnow() + timedelta(minutes=ttl)
+    expires_at = _utcnow() + timedelta(minutes=ttl)
     attempt = 0
     while attempt < 3:
         attempt += 1
@@ -833,7 +845,7 @@ def find_valid_reset_token(raw_token: str) -> PasswordResetToken | None:
     if not raw_token:
         return None
     token_hash = hash_reset_token(raw_token)
-    now = datetime.utcnow()
+    now = _utcnow()
     token = (
         PasswordResetToken.query.filter_by(token_hash=token_hash, used_at=None)
         .filter(PasswordResetToken.expires_at > now)
@@ -847,7 +859,7 @@ def find_valid_reset_token(raw_token: str) -> PasswordResetToken | None:
 
 
 def invalidate_user_tokens(user_id: int) -> None:
-    now = datetime.utcnow()
+    now = _utcnow()
     PasswordResetToken.query.filter(
         PasswordResetToken.user_id == user_id, PasswordResetToken.used_at.is_(None)
     ).update({"used_at": now})
@@ -1032,7 +1044,7 @@ def register_routes(app: Flask) -> None:
                             matched = rc
                             break
                     if matched:
-                        matched.used_at = datetime.utcnow()
+                        matched.used_at = _utcnow()
                         db.session.commit()
                         otp_validated = True
                         log_action(
@@ -1052,7 +1064,7 @@ def register_routes(app: Flask) -> None:
             db.session.commit()
 
         rotation_session(user, otp_validated=otp_validated)
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = _utcnow()
         db.session.commit()
         log_action(action="login_success", actor=user, ip=ip, user_agent=ua)
 
@@ -1139,8 +1151,10 @@ def register_routes(app: Flask) -> None:
                 target_user = existing.user
                 if existing.used_at:
                     reason = "used"
-                elif existing.expires_at and existing.expires_at <= datetime.utcnow():
-                    reason = "expired"
+                else:
+                    expires_at = _coerce_utc(existing.expires_at)
+                    if expires_at and expires_at <= _utcnow():
+                        reason = "expired"
             log_action(
                 action="password_reset_invalid_token",
                 actor=None,
@@ -1210,7 +1224,7 @@ def register_routes(app: Flask) -> None:
         if not allowed_file(f.filename):
             return jsonify({"error": f"Extension non autorisée. Autorisées: {sorted(ALLOWED_EXTENSIONS)}"}), 400
         stem, ext = os.path.splitext(secure_filename(f.filename))
-        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        ts = _utcnow().strftime("%Y%m%dT%H%M%SZ")
         safe_name = f"{stem}_{ts}{ext.lower()}"
         user_folder = current_user_folder()
         user_dir = os.path.join(app.config["UPLOAD_FOLDER"], user_folder)
@@ -1230,7 +1244,7 @@ def register_routes(app: Flask) -> None:
                 "saved_path": os.path.abspath(save_path),
                 "user_folder": user_folder,
                 "original_filename": f.filename,
-                "uploaded_at": datetime.utcnow().isoformat() + "Z",
+                "uploaded_at": _utcnow().isoformat().replace("+00:00", "Z"),
             }
         )
         meta_path = os.path.join(user_dir, f"{stem}_{ts}_meta.json")
@@ -1325,14 +1339,14 @@ def register_routes(app: Flask) -> None:
         meta["user_folder"] = meta.get("user_folder") or user_folder
         meta["report_only"] = True
 
-        stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        stamp = _utcnow().strftime("%Y%m%dT%H%M%SZ")
         job_name = f"{stamp}_{secrets.token_hex(2)}_{run_id}_report_meta.json"
         job_path = pending_dir / job_name
         job_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         apply_upload_permissions(str(job_path), is_dir=False, base_dir=app.config["REPORTS_ROOT"])
 
         manifest["status"] = "queued"
-        manifest["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        manifest["updated_at"] = _utcnow().isoformat().replace("+00:00", "Z")
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
         return jsonify({"ok": True})
@@ -1362,7 +1376,7 @@ def register_routes(app: Flask) -> None:
         trash_root.mkdir(parents=True, exist_ok=True)
         dest = trash_root / run_id
         if dest.exists():
-            suffix = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            suffix = _utcnow().strftime("%Y%m%dT%H%M%SZ")
             dest = trash_root / f"{run_id}_{suffix}"
         shutil.move(str(run_root), str(dest))
         return jsonify({"ok": True, "trash_path": str(dest.relative_to(root))})
@@ -1401,7 +1415,7 @@ def register_routes(app: Flask) -> None:
         dest_root.mkdir(parents=True, exist_ok=True)
         dest = dest_root / run_id
         if dest.exists():
-            suffix = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            suffix = _utcnow().strftime("%Y%m%dT%H%M%SZ")
             dest = dest_root / f"{run_id}_{suffix}"
         shutil.move(str(trash_root), str(dest))
         _update_run_metadata(dest, user_folder=user_folder, old_run_id=run_id, new_run_id=dest.name)
@@ -1764,7 +1778,7 @@ def extract_metadata(req_form) -> dict:
 
     def normalize_meeting_date(raw: str | None) -> str:
         if not raw:
-            return datetime.utcnow().date().isoformat()
+            return _utcnow().date().isoformat()
         try:
             return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
         except ValueError:

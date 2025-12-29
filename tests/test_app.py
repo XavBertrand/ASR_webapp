@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pyotp
@@ -192,7 +192,7 @@ def test_upload_requires_login_and_works(client, app, tmp_path):
     meta_path = tmp_path / "uploads" / user_folder / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
     metadata = json.loads(meta_path.read_text())
     assert metadata["saved_filename"] == saved_name
-    assert metadata["meeting_date"] == datetime.utcnow().date().isoformat()
+    assert metadata["meeting_date"] == datetime.now(timezone.utc).date().isoformat()
 
 
 def parse_secret_from_html(html: str) -> str:
@@ -531,7 +531,7 @@ def test_reset_token_expired(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() - timedelta(minutes=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         )
         db.session.add(token)
         db.session.commit()
@@ -564,7 +564,7 @@ def test_password_policy_enforced_for_admin_reset(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add(token)
         db.session.commit()
@@ -617,12 +617,12 @@ def test_reset_invalidates_other_tokens(client, app):
         t1 = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw1),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         t2 = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw2),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add_all([t1, t2])
         db.session.commit()
@@ -702,7 +702,7 @@ def test_email_change_invalidates_reset_tokens(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add(token)
         db.session.commit()

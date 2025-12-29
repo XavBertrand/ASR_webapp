@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class User(db.Model):
@@ -16,8 +20,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(10), nullable=False)  # "admin" or "user"
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     totp_secret = db.Column(db.String(255))
     totp_encrypted = db.Column(db.Boolean, default=False, nullable=False)
     twofa_enabled = db.Column(db.Boolean, default=False, nullable=False)
@@ -42,7 +46,7 @@ class AuditLog(db.Model):
     __tablename__ = "audit_log"
 
     id = db.Column(db.Integer, primary_key=True)
-    ts = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ts = db.Column(db.DateTime, default=utcnow, nullable=False, index=True)
     actor_user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     actor_username_snapshot = db.Column(db.String(80))
     action = db.Column(db.String(64), nullable=False, index=True)
@@ -59,7 +63,7 @@ class PasswordResetToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     token_hash = db.Column(db.String(128), nullable=False, unique=True, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
     used_at = db.Column(db.DateTime)
     request_ip = db.Column(db.String(64))
