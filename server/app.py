@@ -400,7 +400,15 @@ def _collect_run_entries(
         if not manifest:
             continue
         run_id = manifest.get("run_id") or manifest_path.parent.name
-        meta = manifest.get("meta") or {}
+        meta = manifest.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+        meta_path = manifest_path.parent / "meta.json"
+        meta_file = _load_meta(meta_path) if meta_path.exists() else None
+        if isinstance(meta_file, dict):
+            merged = dict(meta_file)
+            merged.update(meta)
+            meta = merged
         audio = manifest.get("audio") or {}
         artifacts = manifest.get("artifacts") or []
         raw_case_name = meta.get("case_name")
