@@ -719,6 +719,312 @@
             border: 0;
         }
 
+        /* VISUAL POLISH v1 */
+        :root {
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 28px;
+            --fs-xs: 0.72rem;
+            --fs-sm: 0.85rem;
+            --fs-base: 0.95rem;
+            --fs-lg: 1.08rem;
+            --fs-xl: 1.3rem;
+            --lh-tight: 1.2;
+            --lh-base: 1.45;
+            --lh-loose: 1.6;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --shadow-sm: 0 6px 14px rgba(0,0,0,0.2);
+            --shadow-md: 0 12px 26px rgba(0,0,0,0.28);
+            --shadow-lg: 0 18px 40px rgba(0,0,0,0.35);
+            --focus-ring: 0 0 0 3px rgba(96,165,250,0.35);
+            --text-sub: #d4dbe7;
+            --text-muted: #a3b0c0;
+        }
+
+        body { font-size: var(--fs-base); line-height: var(--lh-base); }
+        .content { gap: var(--space-4); }
+        .muted { color: var(--text-muted); font-size: var(--fs-sm); }
+        .tabbar-inner { padding: var(--space-2) var(--space-4); }
+        .panel-grid { gap: var(--space-3); }
+        .form-grid { gap: var(--space-3); }
+        .history-list { gap: var(--space-3); }
+        .history-tools { gap: var(--space-3); margin-top: var(--space-3); }
+        .history-field label { font-size: var(--fs-xs); letter-spacing: 0.3px; text-transform: uppercase; }
+        .history-input { font-size: var(--fs-sm); }
+        .tab {
+            font-size: var(--fs-sm);
+            border-radius: var(--radius-lg);
+            min-height: 44px;
+            padding: 10px 12px;
+        }
+        .tab[aria-selected="true"] { box-shadow: var(--shadow-sm); }
+        .status-card,
+        .visualizer,
+        .panel,
+        .form-section,
+        .actions-card {
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            box-shadow: var(--shadow-md);
+        }
+        .panel-head,
+        .form-header h2 {
+            font-size: var(--fs-lg);
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+        .status-label { font-size: var(--fs-lg); line-height: var(--lh-tight); }
+        .status-hint { color: var(--text-muted); font-size: var(--fs-sm); }
+        .timer { font-size: 3rem; letter-spacing: 1.6px; }
+
+        .field label { font-size: var(--fs-sm); }
+        .field small { font-size: var(--fs-xs); color: var(--text-muted); }
+        .field-tag {
+            border-color: rgba(96,165,250,0.28);
+            background: rgba(96,165,250,0.08);
+            color: var(--text-sub);
+        }
+        .field input,
+        .field select,
+        .field textarea {
+            min-height: 44px;
+            border-radius: var(--radius-md);
+            font-size: var(--fs-base);
+        }
+        .field textarea { min-height: 96px; }
+        .history-filter,
+        .history-input { min-height: 44px; border-radius: 999px; }
+
+        .history-item {
+            background: rgba(15,22,36,0.92);
+            border: 1px solid rgba(148,163,184,0.12);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .history-header { align-items: flex-start; gap: var(--space-3); }
+        .history-title { font-size: var(--fs-lg); line-height: var(--lh-tight); }
+        .history-meta { font-size: var(--fs-xs); color: var(--text-muted); }
+        .history-actions { gap: var(--space-2); align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+        .status-pill {
+            font-size: 0.68rem;
+            border-radius: 999px;
+            padding: 4px 10px;
+        }
+        .history-details {
+            border-top: 1px solid rgba(148,163,184,0.18);
+            padding-top: var(--space-3);
+        }
+
+        .btn,
+        .btn-mini,
+        .link-btn,
+        .history-menu-trigger,
+        .history-menu-item,
+        .modal-btn,
+        .user-menu-item {
+            transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        .btn { min-height: 44px; border-radius: var(--radius-md); padding: var(--space-3); }
+        .controls .btn { min-height: 80px; }
+        .actions-card .btn { min-height: 72px; }
+        .btn span { font-size: var(--fs-xs); letter-spacing: 0.4px; }
+        .btn:active,
+        .btn-mini:active,
+        .link-btn:active,
+        .history-menu-trigger:active,
+        .history-menu-item:active,
+        .modal-btn:active,
+        .user-menu-item:active { transform: translateY(1px) scale(0.98); }
+
+        .btn-primary,
+        .btn-main {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #0b1220;
+            border: none;
+            box-shadow: 0 16px 34px rgba(34, 211, 238, 0.28);
+        }
+        .btn-primary:disabled,
+        .btn-main:disabled {
+            background: #1f2937;
+            color: #6c7482;
+            box-shadow: none;
+        }
+        .btn-primary span,
+        .btn-main span { color: #0b1220; font-weight: 700; }
+        .btn-primary .icon,
+        .btn-main .icon { color: #0b1220; }
+        .btn-secondary {
+            background: #111827;
+            border: 1px solid rgba(148,163,184,0.22);
+            color: var(--text-main);
+        }
+        .btn-secondary:hover,
+        .btn-mini.btn-secondary:hover,
+        .history-menu-item:hover {
+            border-color: rgba(96,165,250,0.45);
+            color: var(--text-main);
+        }
+        .btn-ghost {
+            background: transparent;
+            border: 1px dashed rgba(148,163,184,0.3);
+            color: var(--text-sub);
+        }
+        .btn-ghost:hover,
+        .link-btn:hover {
+            border-color: rgba(96,165,250,0.4);
+            color: var(--text-main);
+        }
+        .btn-danger {
+            background: rgba(239,68,68,0.18);
+            border: 1px solid rgba(248,113,113,0.5);
+            color: #fecaca;
+        }
+        .btn-danger:hover { border-color: rgba(248,113,113,0.8); }
+        .btn-icon {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-mini {
+            min-height: 44px;
+            border-radius: var(--radius-md);
+            padding: 8px 12px;
+            font-size: var(--fs-sm);
+            border: 1px solid rgba(148,163,184,0.2);
+        }
+        .btn-mini.btn-secondary { background: #111827; }
+        .btn-mini.btn-ghost { background: transparent; border-style: dashed; color: var(--text-sub); }
+        .link-btn {
+            min-height: 44px;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: var(--fs-sm);
+            color: var(--text-sub);
+            border-style: solid;
+            border-color: rgba(148,163,184,0.25);
+        }
+
+        .history-menu-trigger {
+            background: #111827;
+            border: 1px solid rgba(148,163,184,0.2);
+        }
+        .history-menu-trigger:hover { border-color: rgba(96,165,250,0.45); }
+        .history-menu {
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transform: translateY(6px) scale(0.98);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            pointer-events: none;
+        }
+        .history-menu.is-open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+        .history-menu-item {
+            border-radius: var(--radius-md);
+            min-height: 44px;
+            padding: 10px 12px;
+        }
+        .history-menu-item.danger {
+            background: rgba(127,29,29,0.4);
+            border-color: rgba(248,113,113,0.5);
+        }
+
+        .user-menu {
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transform: translateY(6px) scale(0.98);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            pointer-events: none;
+        }
+        .user-menu.is-open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+        .user-menu-item { border-radius: var(--radius-md); }
+
+        .meta-advanced {
+            border-radius: var(--radius-lg);
+            padding: var(--space-3);
+        }
+        .meta-advanced summary {
+            padding: 6px 4px;
+            border-radius: var(--radius-md);
+        }
+        .meta-advanced summary:hover { background: rgba(96,165,250,0.08); }
+        .form-block-title {
+            font-size: var(--fs-sm);
+            color: var(--text-sub);
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .form-block { display: flex; flex-direction: column; gap: var(--space-2); }
+        .form-header small { color: var(--text-muted); font-size: var(--fs-xs); }
+        .meta-indicator { font-size: var(--fs-xs); color: var(--text-muted); }
+
+        .modal-backdrop {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .modal-backdrop.is-open { opacity: 1; }
+        .modal {
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(6px) scale(0.98);
+            transition: transform 0.2s ease;
+        }
+        .modal-backdrop.is-open .modal { transform: translateY(0) scale(1); }
+        .modal-title { font-size: var(--fs-lg); }
+        .modal-message { font-size: var(--fs-base); color: var(--text-sub); }
+        .modal-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .modal-btn { min-height: 44px; border-radius: var(--radius-md); }
+        .modal-btn.secondary {
+            background: #111827;
+            border: 1px solid rgba(148,163,184,0.22);
+            color: var(--text-main);
+        }
+
+        .toast-region { gap: var(--space-2); }
+        .toast { animation: toast-in 0.18s ease; border-radius: var(--radius-lg); }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .btn:focus-visible,
+        .btn-mini:focus-visible,
+        .link-btn:focus-visible,
+        .history-menu-trigger:focus-visible,
+        .history-menu-item:focus-visible,
+        .modal-btn:focus-visible,
+        .user-menu-item:focus-visible,
+        .user-trigger:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: none;
+            box-shadow: var(--focus-ring);
+            border-color: var(--primary);
+        }
+        .u-stack-sm { display: flex; flex-direction: column; gap: var(--space-2); }
+        .u-stack-md { display: flex; flex-direction: column; gap: var(--space-3); }
+        .text-muted { color: var(--text-muted); }
+        /* END VISUAL POLISH v1 */
+
         @media (max-width: 640px) {
             main.page {
                 padding-top: 14px;
@@ -737,15 +1043,15 @@
             .panel-grid,
             .form-grid { grid-template-columns: minmax(0, 1fr); }
             .timer { font-size: 2.6rem; }
-            .controls-row { gap: 6px; }
-            .actions-card { gap: 6px; }
-            .actions-card .btn { padding: 8px 6px; min-height: 70px; }
+            .controls-row { gap: 8px; }
+            .actions-card { gap: 8px; }
+            .actions-card .btn { padding: 10px 8px; min-height: 74px; }
             .actions-card .btn span { font-size: 0.74rem; }
             .history-header { flex-direction: column; align-items: flex-start; }
             .history-actions {
                 width: 100%;
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(2, minmax(0, 1fr));
                 justify-content: start;
             }
             .history-actions .status-pill {
@@ -919,15 +1225,15 @@
                 </div>
 
                 <div class="actions-card">
-                    <button class="btn" id="btnImport">
+                    <button class="btn btn-secondary" id="btnImport">
                         <svg class="icon" aria-hidden="true"><use href="#icon-upload_file"></use></svg>
                         <span>Importer</span>
                     </button>
-                    <button class="btn" id="btnDownload" disabled>
+                    <button class="btn btn-secondary" id="btnDownload" disabled>
                         <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
                         <span>Télécharger</span>
                     </button>
-                    <button class="btn" id="btnTrash" disabled>
+                    <button class="btn btn-danger" id="btnTrash" disabled>
                         <svg class="icon" aria-hidden="true"><use href="#icon-delete_outline"></use></svg>
                         <span>Vider</span>
                     </button>
@@ -952,40 +1258,43 @@
                         <svg class="icon" style="color:var(--warn);" aria-hidden="true"><use href="#icon-warning"></use></svg>
                         <span id="metaWarningText">Champs requis manquants.</span>
                     </div>
-                    <div class="form-grid form-grid-essentials">
-                        <div class="field" id="fieldCaseName">
-                            <label for="inputCaseName"><span>Nom du dossier</span><span class="field-tag">Optionnel</span></label>
-                            <input type="text" id="inputCaseName" maxlength="160" placeholder="Ex: Affaire Dupont - licenciement" />
-                            <small>Optionnel, sert de titre principal dans l'historique.</small>
-                        </div>
-                        <div class="field" id="fieldMeetingDate">
-                            <label for="inputMeetingDate">Date de l'entretien</label>
-                            <input type="date" id="inputMeetingDate" />
-                            <small>Par défaut : date du jour.</small>
-                        </div>
-                        <div class="field" id="fieldMeetingReportType">
-                            <label for="inputMeetingReportType">Type de compte rendu</label>
-                            <select id="inputMeetingReportType">
-                                <option value="entretien_collaborateur">Entretien collaborateur</option>
-                                <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
-                                <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
-                                <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
-                            </select>
-                            <small>Choix unique parmi les catégories configurées.</small>
+                    <div class="form-block u-stack-sm">
+                        <div class="form-block-title">Essentiel</div>
+                        <div class="form-grid form-grid-essentials">
+                            <div class="field" id="fieldCaseName">
+                                <label for="inputCaseName"><span>Dossier</span><span class="field-tag">Optionnel</span></label>
+                                <input type="text" id="inputCaseName" maxlength="160" placeholder="Ex: Affaire Dupont - licenciement" />
+                                <small>Titre affiché dans l'historique.</small>
+                            </div>
+                            <div class="field" id="fieldSpeakerContext">
+                                <label for="inputSpeakerContext"><span>Intervenants</span><span class="field-tag">Optionnel</span></label>
+                                <textarea id="inputSpeakerContext" placeholder="Ex: Avocat avec client, experts, etc."></textarea>
+                                <small>Rôles ou participants à l'entretien.</small>
+                            </div>
+                            <div class="field" id="fieldMeetingDate">
+                                <label for="inputMeetingDate">Date</label>
+                                <input type="date" id="inputMeetingDate" />
+                                <small>Par défaut : date du jour.</small>
+                            </div>
                         </div>
                     </div>
                     <details class="meta-advanced" id="metaAdvanced">
-                        <summary>Avancé <span class="field-tag">Optionnel</span></summary>
+                        <summary><span>Avancé</span><span class="field-tag">Optionnel</span></summary>
                         <div class="form-grid">
                             <div class="field" id="fieldAsrPrompt">
-                                <label for="inputAsrPrompt"><span>Mots spécifiques</span><span class="field-tag">Optionnel</span></label>
-                                <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
-                                <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
+                                <label for="inputAsrPrompt"><span>Mots clés</span><span class="field-tag">Optionnel</span></label>
+                                <textarea id="inputAsrPrompt" placeholder="Tags, noms propres, vocabulaire spécifique."></textarea>
+                                <small>Mots clés pour guider la transcription.</small>
                             </div>
-                            <div class="field" id="fieldSpeakerContext">
-                                <label for="inputSpeakerContext"><span>Contexte intervenants</span><span class="field-tag">Optionnel</span></label>
-                                <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                                <small>Description des roles/participants.</small>
+                            <div class="field" id="fieldMeetingReportType">
+                                <label for="inputMeetingReportType">Type de compte rendu</label>
+                                <select id="inputMeetingReportType">
+                                    <option value="entretien_collaborateur">Entretien collaborateur</option>
+                                    <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
+                                    <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
+                                    <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
+                                </select>
+                                <small>Requis pour l'envoi.</small>
                             </div>
                         </div>
                     </details>
@@ -999,8 +1308,8 @@
                         <span id="historyTitle">Historique des rapports</span>
                         <div class="panel-actions">
                             <select id="historyUserFilter" class="history-filter hidden" aria-label="Filtrer par utilisateur"></select>
-                            <button class="link-btn" id="toggleTrash">Corbeille</button>
-                            <button class="link-btn" id="refreshReports">Actualiser</button>
+                            <button class="link-btn btn-ghost" id="toggleTrash">Corbeille</button>
+                            <button class="link-btn btn-ghost" id="refreshReports">Actualiser</button>
                         </div>
                     </div>
                     <div class="history-tools">
@@ -1033,19 +1342,19 @@
     <div class="controls" aria-label="Commandes principales"> <!-- FIXED FOOTER BAR -->
         <div class="controls-inner">
             <div class="controls-row">
-                <button class="btn btn-main" id="btnMain">
+                <button class="btn btn-main btn-primary" id="btnMain">
                     <svg class="icon" id="mainIcon" aria-hidden="true"><use href="#icon-mic"></use></svg>
                     <span>Enregistrer</span>
                 </button>
-                <button class="btn" id="btnStop" disabled>
+                <button class="btn btn-secondary" id="btnStop" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg>
                     <span>Stop</span>
                 </button>
-                <button class="btn" id="btnPlay" disabled>
+                <button class="btn btn-secondary" id="btnPlay" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-play_arrow"></use></svg>
                     <span>Écouter</span>
                 </button>
-                <button class="btn" id="btnUpload" disabled>
+                <button class="btn btn-secondary" id="btnUpload" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-cloud_upload"></use></svg>
                     <span>Envoyer</span>
                     <span class="btn-spinner" aria-hidden="true"></span>
@@ -1061,15 +1370,15 @@
     </div>
     <!-- UX: CONFIRM MODAL + TOAST -->
     <div class="modal-backdrop" id="uiModalBackdrop" hidden>
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uiModalTitle" aria-describedby="uiModalMessage">
-            <div class="modal-title" id="uiModalTitle">Confirmation</div>
-            <div class="modal-message" id="uiModalMessage"></div>
-            <div class="modal-actions">
-                <button class="modal-btn" id="uiModalCancel" type="button">Annuler</button>
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uiModalTitle" aria-describedby="uiModalMessage">
+                <div class="modal-title" id="uiModalTitle">Confirmation</div>
+                <div class="modal-message" id="uiModalMessage"></div>
+                <div class="modal-actions">
+                <button class="modal-btn secondary" id="uiModalCancel" type="button">Annuler</button>
                 <button class="modal-btn primary" id="uiModalConfirm" type="button">Confirmer</button>
+                </div>
             </div>
         </div>
-    </div>
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
     <script>
@@ -1115,6 +1424,7 @@
                 this.activeHistoryMenu = null;
                 this.activeHistoryMenuTrigger = null;
                 this.activeHistoryMenuItems = [];
+                this.menuHideTimeout = null;
                 this.isUploading = false;
 
                 this.initElements();
@@ -1204,6 +1514,7 @@
                 this.historyUserFilter = document.getElementById('historyUserFilter');
                 this.historySearchInput = document.getElementById('historySearch');
                 this.historySortSelect = document.getElementById('historySort');
+                this.metaAdvanced = document.getElementById('metaAdvanced');
 
                 // Metadata
                 this.inputCaseName = document.getElementById('inputCaseName');
@@ -1631,10 +1942,16 @@
             openHistoryMenu(menu, trigger) {
                 if (!menu || !trigger) return;
                 this.closeHistoryMenu({ returnFocus: false });
+                if (this.menuHideTimeout) {
+                    clearTimeout(this.menuHideTimeout);
+                    this.menuHideTimeout = null;
+                }
                 this.activeHistoryMenu = menu;
                 this.activeHistoryMenuTrigger = trigger;
                 this.activeHistoryMenuItems = Array.from(menu.querySelectorAll('[role="menuitem"]'));
                 menu.hidden = false;
+                menu.classList.remove('is-open');
+                requestAnimationFrame(() => menu.classList.add('is-open'));
                 trigger.setAttribute('aria-expanded', 'true');
                 this.setMenuItemsTabIndex(menu, 0);
                 const first = this.activeHistoryMenuItems[0];
@@ -1643,14 +1960,20 @@
 
             closeHistoryMenu(options = { returnFocus: true }) {
                 if (!this.activeHistoryMenu) return;
-                this.activeHistoryMenu.hidden = true;
-                this.setMenuItemsTabIndex(this.activeHistoryMenu, -1);
-                if (this.activeHistoryMenuTrigger) {
-                    this.activeHistoryMenuTrigger.setAttribute('aria-expanded', 'false');
+                const menu = this.activeHistoryMenu;
+                const trigger = this.activeHistoryMenuTrigger;
+                menu.classList.remove('is-open');
+                this.setMenuItemsTabIndex(menu, -1);
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
                     if (options.returnFocus) {
-                        this.activeHistoryMenuTrigger.focus();
+                        trigger.focus();
                     }
                 }
+                if (this.menuHideTimeout) clearTimeout(this.menuHideTimeout);
+                this.menuHideTimeout = setTimeout(() => {
+                    menu.hidden = true;
+                }, 160);
                 this.activeHistoryMenu = null;
                 this.activeHistoryMenuTrigger = null;
                 this.activeHistoryMenuItems = [];
@@ -1944,7 +2267,7 @@
 
                     if (!this.showTrash && report.download_url) {
                         const download = document.createElement('a');
-                        download.className = 'btn-mini';
+                        download.className = 'btn-mini btn-secondary';
                         download.textContent = 'PDF';
                         download.href = report.download_url;
                         download.setAttribute('download', '');
@@ -1952,7 +2275,7 @@
                     }
 
                     const filesBtn = document.createElement('button');
-                    filesBtn.className = 'btn-mini';
+                    filesBtn.className = 'btn-mini btn-secondary';
                     filesBtn.type = 'button';
                     filesBtn.textContent = 'Fichiers';
                     actions.appendChild(filesBtn);
@@ -1963,7 +2286,7 @@
                     const menuWrap = document.createElement('div');
                     menuWrap.className = 'history-menu-wrap';
                     const menuTrigger = document.createElement('button');
-                    menuTrigger.className = 'history-menu-trigger';
+                    menuTrigger.className = 'history-menu-trigger btn-icon';
                     menuTrigger.type = 'button';
                     menuTrigger.textContent = '⋯';
                     menuTrigger.setAttribute('aria-haspopup', 'menu');
@@ -2153,7 +2476,7 @@
                             row.appendChild(metaInfo);
 
                             const link = document.createElement('a');
-                            link.className = 'btn-mini';
+                            link.className = 'btn-mini btn-ghost';
                             link.textContent = 'Télécharger';
                             if (entry.url && entry.exists) {
                                 link.href = entry.url;
@@ -2365,6 +2688,9 @@
                     this.showMetadataWarning(`Champs requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type de compte rendu').join(', ')}`);
                     this.setActiveTab('meta');
                     const target = missing[0].el;
+                    if (this.metaAdvanced && target && this.metaAdvanced.contains(target)) {
+                        this.metaAdvanced.open = true;
+                    }
                     if (target) {
                         requestAnimationFrame(() => target.focus({ preventScroll: true }));
                     }
@@ -2921,7 +3247,7 @@
 
             showUploadErrorActions(message) {
                 if (!this.uploadHint) return;
-                this.uploadHint.innerHTML = `${message}<div class=\"upload-actions\"><button class=\"link-btn\" id=\"retryUpload\">Réessayer</button><button class=\"link-btn\" id=\"downloadLocal\">Télécharger localement</button><span class=\"muted\">Contactez le support si le problème persiste.</span></div>`;
+                this.uploadHint.innerHTML = `${message}<div class=\"upload-actions\"><button class=\"link-btn btn-ghost\" id=\"retryUpload\">Réessayer</button><button class=\"link-btn btn-ghost\" id=\"downloadLocal\">Télécharger localement</button><span class=\"muted\">Contactez le support si le problème persiste.</span></div>`;
                 const retry = document.getElementById('retryUpload');
                 if (retry) retry.onclick = () => this.uploadToJetson();
                 const dl = document.getElementById('downloadLocal');
@@ -2960,7 +3286,10 @@
                     if (resolved) return;
                     resolved = true;
                     cleanup();
-                    backdrop.hidden = true;
+                    backdrop.classList.remove('is-open');
+                    setTimeout(() => {
+                        backdrop.hidden = true;
+                    }, 160);
                     if (lastActive && typeof lastActive.focus === 'function') {
                         lastActive.focus();
                     }
@@ -3004,6 +3333,8 @@
                 confirmBtn.classList.toggle('primary', !danger);
 
                 backdrop.hidden = false;
+                backdrop.classList.remove('is-open');
+                requestAnimationFrame(() => backdrop.classList.add('is-open'));
                 confirmBtn.focus();
 
                 document.addEventListener('keydown', onKeydown);
@@ -3085,13 +3416,20 @@
             const toggle = document.getElementById('userMenuToggle');
             const menu = document.getElementById('userMenu');
             if (!toggle || !menu) return;
+            let hideTimer = null;
             const openMenu = () => {
+                if (hideTimer) clearTimeout(hideTimer);
                 menu.hidden = false;
+                menu.classList.remove('is-open');
+                requestAnimationFrame(() => menu.classList.add('is-open'));
                 toggle.setAttribute('aria-expanded', 'true');
                 toggle.classList.add('is-open');
             };
             const closeMenu = () => {
-                menu.hidden = true;
+                menu.classList.remove('is-open');
+                hideTimer = setTimeout(() => {
+                    menu.hidden = true;
+                }, 160);
                 toggle.setAttribute('aria-expanded', 'false');
                 toggle.classList.remove('is-open');
             };
@@ -3150,5 +3488,14 @@
             });
         }
     </script>
+    <!--
+    Changelog (visual polish v1):
+    - Design system CSS (spacing, type scale, radius, shadows, focus ring).
+    - Button variants and sizing for clearer primary/secondary/danger actions.
+    - Refined history layout with calmer borders and aligned actions.
+    - Reorganized Informations tab into Essentiel/Avancé with improved spacing.
+    - Subtle menu/modal/toast animations for visible polish.
+    - Improved contrast for secondary text and labels.
+    -->
 </body>
 </html>
