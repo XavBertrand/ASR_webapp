@@ -4,78 +4,60 @@
     <meta charset="UTF-8">
     <title>Administration - Utilisateurs</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        :root { color-scheme: light dark; }
-        *, *::before, *::after { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
-        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
-        h1 { margin: 0; font-size: 1.2rem; }
-        main { padding: 16px 20px; display: grid; gap: 16px; max-width: 1000px; margin: 0 auto; }
-        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
-        label { display: block; margin-top: 10px; font-weight: 600; }
-        input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
-        button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; }
-        .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { padding: 10px; border-bottom: 1px solid #1f2937; text-align: left; }
-        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .pill { padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; background: #1f2937; }
-        .pill.active { background: #065f46; color: #d1fae5; }
-        .pill.inactive { background: #7f1d1d; color: #fecdd3; }
-        #flash { display: none; padding: 10px 12px; border-radius: 10px; }
-        #flash.show { display: block; }
-        #flash.ok { background: #064e3b; color: #d1fae5; }
-        #flash.err { background: #7f1d1d; color: #fecdd3; }
-        a { color: #93c5fd; }
-        .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
-        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app_shell.css') }}">
 </head>
-<body>
-    <header>
-        <h1>Administration — Utilisateurs</h1>
-        <div class="actions">
-            <a class="ghost-btn" href="/">← Retour app</a>
-            <a href="/admin/2fa/setup">2FA admin</a>
-            <a href="/admin/audit">Audit</a>
-            <form method="post" action="/logout" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button type="submit">Déconnexion</button>
-            </form>
+<body class="page-admin">
+    <header class="topbar">
+        <div class="topbar-inner container">
+            <h1>Administration — Utilisateurs</h1>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/">← Retour app</a>
+                <a class="btn btn-ghost" href="/admin/2fa/setup">2FA admin</a>
+                <a class="btn btn-ghost" href="/admin/audit">Audit</a>
+                <form method="post" action="/logout">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button class="btn btn-secondary" type="submit">Déconnexion</button>
+                </form>
+            </div>
         </div>
     </header>
-    <main>
-        <div id="flash"></div>
-        <section class="card">
+    <main class="container main-content">
+        <div id="flash" class="alert"></div>
+        <section class="card stack">
             <h2>Créer un utilisateur</h2>
-            <form id="create-form">
+            <form id="create-form" class="stack">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <label for="new-username">Identifiant</label>
-                <input id="new-username" name="username" required>
-
-                <label for="new-email">Email (optionnel)</label>
-                <input id="new-email" name="email" type="email" autocomplete="email">
-
-                <label for="new-role">Rôle</label>
-                <select id="new-role" name="role">
-                    <option value="user">user</option>
-                    <option value="admin">admin</option>
-                </select>
-
-                <label for="new-password">Mot de passe initial</label>
-                <input id="new-password" name="password" type="password" required minlength="8">
-
-                <button type="submit">Créer</button>
+                <div class="field">
+                    <label for="new-username">Identifiant</label>
+                    <input id="new-username" name="username" required>
+                </div>
+                <div class="field">
+                    <label for="new-email">Email (optionnel)</label>
+                    <input id="new-email" name="email" type="email" autocomplete="email">
+                </div>
+                <div class="field">
+                    <label for="new-role">Rôle</label>
+                    <select id="new-role" name="role">
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="new-password">Mot de passe initial</label>
+                    <input id="new-password" name="password" type="password" required minlength="8">
+                </div>
+                <button class="btn btn-primary btn-block" type="submit">Créer</button>
             </form>
         </section>
 
-        <section class="card">
+        <section class="card stack">
             <h2>Utilisateurs</h2>
             <div class="table-wrap">
                 <table id="users-table">
                     <thead>
                         <tr>
-                            <th>Username</th>
+                            <th>Identifiant</th>
                             <th>Email</th>
                             <th>Email vérifié</th>
                             <th>Rôle</th>
@@ -96,7 +78,8 @@
         function flash(msg, ok = true) {
             const el = document.getElementById('flash');
             el.textContent = msg;
-            el.className = ok ? 'ok show' : 'err show';
+            el.className = ok ? 'alert success' : 'alert error';
+            el.classList.add('show');
             setTimeout(() => el.classList.remove('show'), 4000);
         }
 
@@ -108,23 +91,23 @@
             data.forEach(u => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${u.username}</td>
-                    <td>
+                    <td data-label="Identifiant">${u.username}</td>
+                    <td data-label="Email">
                         <input data-field="email" data-id="${u.id}" type="email" value="${u.email || ''}" placeholder="email@domaine.tld">
                     </td>
-                    <td>
-                        <label style="display:flex; gap:6px; align-items:center;">
+                    <td data-label="Email vérifié">
+                        <label class="inline-check">
                             <input data-field="email_verified" data-id="${u.id}" type="checkbox" ${u.email_verified ? 'checked' : ''}>
                             <span>Vérifié</span>
                         </label>
                     </td>
-                    <td>${u.role}</td>
-                    <td><span class="pill ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'actif' : 'inactif'}</span></td>
-                    <td>${u.twofa_enabled ? '✅' : '—'}</td>
-                    <td class="actions">
-                        <button data-action="save-email" data-id="${u.id}">Enregistrer email</button>
-                        <button data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
-                        <button data-action="reset" data-id="${u.id}">Reset mot de passe</button>
+                    <td data-label="Rôle">${u.role}</td>
+                    <td data-label="Actif"><span class="pill ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'actif' : 'inactif'}</span></td>
+                    <td data-label="2FA">${u.twofa_enabled ? '✅' : '—'}</td>
+                    <td data-label="Actions" class="admin-actions">
+                        <button class="btn-mini btn-secondary" data-action="save-email" data-id="${u.id}">Enregistrer email</button>
+                        <button class="btn-mini ${u.is_active ? 'btn-danger' : 'btn-secondary'}" data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
+                        <button class="btn-mini btn-danger" data-action="reset" data-id="${u.id}">Reset mot de passe</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
