@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Build-time metadata (injectée par le workflow)
 ARG GIT_BRANCH=unknown
