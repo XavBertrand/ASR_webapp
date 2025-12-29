@@ -720,7 +720,7 @@ def load_current_user() -> None | Any:
     g.current_user = None
     uid = session.get("user_id")
     if uid:
-        user = User.query.get(uid)
+        user = db.session.get(User, uid)
         if user and user.is_active:
             g.current_user = user
         else:
@@ -1550,7 +1550,9 @@ def register_routes(app: Flask) -> None:
         data = request.get_json() or request.form
         raw_email = data.get("email")
         email_verified_raw = data.get("email_verified")
-        user = User.query.get_or_404(user_id)
+        user = db.session.get(User, user_id)
+        if not user:
+            abort(404)
         new_email = normalize_email(raw_email)
         if new_email and len(new_email) > 255:
             return json_error("Email trop long", 400)
@@ -1595,7 +1597,9 @@ def register_routes(app: Flask) -> None:
     def reset_password(user_id: int):
         data = request.get_json() or request.form
         password = data.get("password") or ""
-        user = User.query.get_or_404(user_id)
+        user = db.session.get(User, user_id)
+        if not user:
+            abort(404)
         if (user.role == "admin" and len(password) < 12) or len(password) < 8:
             return json_error("Mot de passe trop court", 400)
         user.password_hash = hash_password(password)
@@ -1613,7 +1617,9 @@ def register_routes(app: Flask) -> None:
     @app.post("/api/admin/users/<int:user_id>/toggle-active")
     @admin_required
     def toggle_active(user_id: int):
-        user = User.query.get_or_404(user_id)
+        user = db.session.get(User, user_id)
+        if not user:
+            abort(404)
         user.is_active = not user.is_active
         db.session.commit()
         log_action(

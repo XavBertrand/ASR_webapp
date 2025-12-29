@@ -512,7 +512,7 @@ def test_reset_token_single_use(client, app, caplog):
     with app.app_context():
         tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
         assert tokens and all(t.used_at is not None for t in tokens)
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         assert verify_password(user.password_hash, "NewPassword123")
 
 
@@ -652,7 +652,7 @@ def test_admin_can_set_and_clear_email(client, app):
     res = admin_update_email(client, user_id, "NewEmail@Example.com", verified=True)
     assert res.status_code == 200
     with app.app_context():
-        refreshed = User.query.get(user_id)
+        refreshed = db.session.get(User, user_id)
         assert refreshed.email == "newemail@example.com"
         assert refreshed.email_verified is True
         audit = AuditLog.query.filter_by(action="admin_user_email_updated", target_user_id=user_id).order_by(
@@ -662,7 +662,7 @@ def test_admin_can_set_and_clear_email(client, app):
     res_clear = admin_update_email(client, user_id, "", verified=False)
     assert res_clear.status_code == 200
     with app.app_context():
-        refreshed = User.query.get(user_id)
+        refreshed = db.session.get(User, user_id)
         assert refreshed.email is None
         assert refreshed.email_verified is False
 
