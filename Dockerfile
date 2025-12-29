@@ -1,6 +1,23 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+# Build-time metadata (injectée par le workflow)
+ARG GIT_BRANCH=unknown
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+ARG APP_VERSION=dev
+
+LABEL org.opencontainers.image.source="https://github.com/XavBertrand/ASR_webapp" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.ref.name="${GIT_BRANCH}" \
+      org.opencontainers.image.description="ASR Webapp (UI + API)"
+
+ENV APP_VERSION="${APP_VERSION}" \
+    GIT_BRANCH="${GIT_BRANCH}" \
+    GIT_SHA="${VCS_REF}" \
+    BUILD_DATE="${BUILD_DATE}" \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UPLOAD_FOLDER=/app/recordings
 
