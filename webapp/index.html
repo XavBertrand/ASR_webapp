@@ -265,7 +265,18 @@
         .panel.show { opacity: 1; }
         .panel-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-weight: 600; color: var(--text-sub); }
         .panel-actions { display: flex; align-items: center; gap: 8px; }
+        .history-panel .panel-actions { flex-wrap: wrap; }
         .pill { padding: 4px 10px; border-radius: 999px; background: #1f2937; color: var(--text-main); font-size: 0.8rem; }
+        .history-filter {
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 999px;
+            padding: 6px 12px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            min-width: 180px;
+        }
+        .history-filter:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
         .muted { color: var(--text-sub); font-size: 0.95rem; margin-top: 10px; }
 
         .audio-preview audio { width: 100%; margin-top: 10px; display: none; }
@@ -779,6 +790,7 @@
                     <div class="panel-head">
                         <span id="historyTitle">Historique des rapports</span>
                         <div class="panel-actions">
+                            <select id="historyUserFilter" class="history-filter hidden" aria-label="Filtrer par utilisateur"></select>
                             <button class="link-btn" id="toggleTrash">Corbeille</button>
                             <button class="link-btn" id="refreshReports">Actualiser</button>
                         </div>
@@ -857,9 +869,14 @@
                 this.reportPollId = null;
                 this.reportTypeLabels = {};
                 this.showTrash = false;
+                this.currentUser = window.currentUser || null;
+                this.isAdmin = this.currentUser?.role === 'admin';
+                this.lastReports = [];
+                this.userFilterValue = 'all';
 
                 this.initElements();
                 this.updateHistoryHeader();
+                this.syncAdminUi();
                 this.initReportTypesFromSelect();
                 this.bindEvents();
                 this.setupTabsA11y(); // TABS A11Y
@@ -869,6 +886,9 @@
                 this.loadMeetingReportTypes();
                 this.resizeCanvas();
                 this.updateViewportMetrics(); // ANDROID INSET UPDATE
+                window.addEventListener('current-user', (event) => {
+                    this.setCurrentUser(event?.detail || null);
+                });
 
                 const handleResize = () => {
                     this.resizeCanvas();
@@ -937,6 +957,7 @@
                 this.refreshReportsBtn = document.getElementById('refreshReports');
                 this.toggleTrashBtn = document.getElementById('toggleTrash');
                 this.historyTitle = document.getElementById('historyTitle');
+                this.historyUserFilter = document.getElementById('historyUserFilter');
 
                 // Metadata
                 this.inputCaseName = document.getElementById('inputCaseName');
@@ -978,6 +999,12 @@
                 }
                 if (this.toggleTrashBtn) {
                     this.toggleTrashBtn.addEventListener('click', () => this.toggleTrashView());
+                }
+                if (this.historyUserFilter) {
+                    this.historyUserFilter.addEventListener('change', () => {
+                        this.userFilterValue = this.historyUserFilter.value || 'all';
+                        this.renderReports(this.lastReports);
+                    });
                 }
 
                 // Metadata persistence
@@ -1208,6 +1235,76 @@
                 }
             }
 
+            syncAdminUi() {
+                if (this.historyUserFilter) {
+                    this.historyUserFilter.classList.toggle('hidden', !this.isAdmin);
+                }
+                if (!this.isAdmin) {
+                    this.userFilterValue = 'all';
+                    if (this.historyUserFilter) this.historyUserFilter.value = 'all';
+                }
+            }
+
+            setCurrentUser(data) {
+                this.currentUser = data;
+                this.isAdmin = data?.role === 'admin';
+                this.syncAdminUi();
+                if (this.lastReports.length) {
+                    this.renderReports(this.lastReports);
+                }
+            }
+
+            getReportOwnerValue(report) {
+                if (!report) return '';
+                return String(report.user_folder || report.username || '').trim();
+            }
+
+            getReportOwnerLabel(report) {
+                if (!report) return '';
+                return String(report.username || report.user_folder || '').trim();
+            }
+
+            updateUserFilterOptions(reports) {
+                if (!this.historyUserFilter) return;
+                if (!this.isAdmin) {
+                    this.historyUserFilter.classList.add('hidden');
+                    return;
+                }
+                const entries = new Map();
+                (reports || []).forEach((report) => {
+                    const value = this.getReportOwnerValue(report);
+                    if (!value) return;
+                    const label = this.getReportOwnerLabel(report) || value;
+                    if (!entries.has(value)) entries.set(value, label);
+                });
+                const currentValue = this.userFilterValue || this.historyUserFilter.value || 'all';
+                this.historyUserFilter.innerHTML = '';
+                const allOpt = document.createElement('option');
+                allOpt.value = 'all';
+                allOpt.textContent = 'Tous les utilisateurs';
+                this.historyUserFilter.appendChild(allOpt);
+                Array.from(entries.entries())
+                    .sort((a, b) => a[1].localeCompare(b[1], 'fr', { sensitivity: 'base' }))
+                    .forEach(([value, label]) => {
+                        const opt = document.createElement('option');
+                        opt.value = value;
+                        opt.textContent = label;
+                        this.historyUserFilter.appendChild(opt);
+                    });
+                const nextValue = entries.has(currentValue) ? currentValue : 'all';
+                this.historyUserFilter.value = nextValue;
+                this.userFilterValue = nextValue;
+                this.historyUserFilter.disabled = entries.size === 0;
+                this.historyUserFilter.classList.remove('hidden');
+            }
+
+            filterReports(reports) {
+                if (!this.isAdmin) return reports;
+                const value = this.userFilterValue || this.historyUserFilter?.value || 'all';
+                if (!value || value === 'all') return reports;
+                return reports.filter((report) => this.getReportOwnerValue(report) === value);
+            }
+
             toggleTrashView() {
                 this.showTrash = !this.showTrash;
                 this.updateHistoryHeader();
@@ -1238,7 +1335,9 @@
                         throw new Error(`Erreur serveur: ${res.status}`);
                     }
                     const data = await res.json();
-                    this.renderReports(Array.isArray(data) ? data : []);
+                    const reports = Array.isArray(data) ? data : [];
+                    this.lastReports = reports;
+                    this.renderReports(reports);
                     if (this.reportsHint && !silent) {
                         const stamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                         this.reportsHint.textContent = `Dernière mise à jour: ${stamp}`;
@@ -1269,7 +1368,9 @@
                         throw new Error(`Erreur serveur: ${res.status}`);
                     }
                     const data = await res.json();
-                    this.renderReports(Array.isArray(data) ? data : []);
+                    const reports = Array.isArray(data) ? data : [];
+                    this.lastReports = reports;
+                    this.renderReports(reports);
                     if (this.reportsHint && !silent) {
                         const stamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                         this.reportsHint.textContent = `Dernière mise à jour: ${stamp}`;
@@ -1287,15 +1388,18 @@
                 const runId = report?.run_id || report?.id;
                 if (!runId) return;
                 const csrf = readCsrfCookie();
+                const bodyPayload = {};
+                if (report?.user_folder) bodyPayload.user_folder = report.user_folder;
                 try {
                     const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/rerun-report`), {
                         method: 'POST',
-                        headers: { 'X-CSRF-Token': csrf },
-                        credentials: 'same-origin'
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(bodyPayload)
                     });
                     if (!res.ok) {
-                        const payload = await res.json().catch(() => ({}));
-                        const message = payload.error || `Relance impossible (${res.status})`;
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Relance impossible (${res.status})`;
                         alert(message);
                         return;
                     }
@@ -1305,18 +1409,21 @@
                 }
             }
 
-            async trashRun(runId) {
+            async trashRun(runId, userFolder) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
+                const bodyPayload = {};
+                if (userFolder) bodyPayload.user_folder = userFolder;
                 try {
                     const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/trash`), {
                         method: 'POST',
-                        headers: { 'X-CSRF-Token': csrf },
-                        credentials: 'same-origin'
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(bodyPayload)
                     });
                     if (!res.ok) {
-                        const payload = await res.json().catch(() => ({}));
-                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Suppression impossible (${res.status})`;
                         alert(message);
                         return;
                     }
@@ -1326,18 +1433,21 @@
                 }
             }
 
-            async restoreRun(runId) {
+            async restoreRun(runId, userFolder) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
+                const bodyPayload = {};
+                if (userFolder) bodyPayload.user_folder = userFolder;
                 try {
                     const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/restore`), {
                         method: 'POST',
-                        headers: { 'X-CSRF-Token': csrf },
-                        credentials: 'same-origin'
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(bodyPayload)
                     });
                     if (!res.ok) {
-                        const payload = await res.json().catch(() => ({}));
-                        const message = payload.error || `Restauration impossible (${res.status})`;
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Restauration impossible (${res.status})`;
                         alert(message);
                         return;
                     }
@@ -1347,18 +1457,21 @@
                 }
             }
 
-            async deleteRunPermanently(runId) {
+            async deleteRunPermanently(runId, userFolder) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
+                const bodyPayload = {};
+                if (userFolder) bodyPayload.user_folder = userFolder;
                 try {
                     const res = await fetch(this.buildUrl(`/api/trash/${encodeURIComponent(runId)}/delete`), {
                         method: 'POST',
-                        headers: { 'X-CSRF-Token': csrf },
-                        credentials: 'same-origin'
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(bodyPayload)
                     });
                     if (!res.ok) {
-                        const payload = await res.json().catch(() => ({}));
-                        const message = payload.error || `Suppression impossible (${res.status})`;
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Suppression impossible (${res.status})`;
                         alert(message);
                         return;
                     }
@@ -1370,8 +1483,11 @@
 
             renderReports(reports) {
                 if (!this.reportList) return;
+                const sourceReports = Array.isArray(reports) ? reports : [];
+                this.updateUserFilterOptions(sourceReports);
+                const filteredReports = this.filterReports(sourceReports);
                 this.reportList.innerHTML = '';
-                if (!reports.length) {
+                if (!filteredReports.length) {
                     if (this.reportEmpty) this.reportEmpty.classList.remove('hidden');
                     return;
                 }
@@ -1387,7 +1503,7 @@
                     trashed: { label: 'Corbeille', className: 'status-missing' }
                 };
 
-                reports.forEach((report) => {
+                filteredReports.forEach((report) => {
                     const item = document.createElement('div');
                     item.className = 'history-item';
 
@@ -1402,6 +1518,10 @@
                     const meta = document.createElement('div');
                     meta.className = 'history-meta';
                     const metaParts = [];
+                    if (this.isAdmin) {
+                        const ownerLabel = this.getReportOwnerLabel(report);
+                        if (ownerLabel) metaParts.push(`Utilisateur: ${ownerLabel}`);
+                    }
                     if (report.meeting_date) {
                         metaParts.push(report.meeting_date);
                     }
@@ -1471,7 +1591,7 @@
                             const id = report.run_id || report.id;
                             if (!id) return;
                             if (!confirm('Restaurer ce run depuis la corbeille ?')) return;
-                            this.restoreRun(id);
+                            this.restoreRun(id, report.user_folder);
                         });
                         actions.appendChild(restoreBtn);
 
@@ -1484,7 +1604,7 @@
                             if (!id) return;
                             if (!confirm('Supprimer définitivement ce run ?')) return;
                             if (!confirm('Cette action est irréversible. Confirmer ?')) return;
-                            this.deleteRunPermanently(id);
+                            this.deleteRunPermanently(id, report.user_folder);
                         });
                         actions.appendChild(deleteBtn);
                     } else {
@@ -1503,7 +1623,7 @@
                             const id = report.run_id || report.id;
                             if (!id) return;
                             if (!confirm('Déplacer ce run vers la corbeille ?')) return;
-                            this.trashRun(id);
+                            this.trashRun(id, report.user_folder);
                         });
                         actions.appendChild(trashBtn);
                     }
@@ -1619,16 +1739,18 @@
                     return;
                 }
                 const csrf = readCsrfCookie();
+                const bodyPayload = { case_name: caseName };
+                if (report?.user_folder) bodyPayload.user_folder = report.user_folder;
                 try {
                     const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/rename`), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
                         credentials: 'same-origin',
-                        body: JSON.stringify({ case_name: caseName })
+                        body: JSON.stringify(bodyPayload)
                     });
                     if (!res.ok) {
-                        const payload = await res.json().catch(() => ({}));
-                        const message = payload.error || `Renommage impossible (${res.status})`;
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Renommage impossible (${res.status})`;
                         alert(message);
                         return;
                     }
@@ -2344,6 +2466,8 @@
                 const res = await fetch('/api/me', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const data = await res.json();
+                window.currentUser = data;
+                window.dispatchEvent(new CustomEvent('current-user', { detail: data }));
                 const initials = computeInitials(data.username, data.role);
                 const initialsEl = document.getElementById('userInitials');
                 if (initialsEl) initialsEl.textContent = initials;
