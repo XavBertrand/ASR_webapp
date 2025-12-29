@@ -4,51 +4,52 @@
     <meta charset="UTF-8">
     <title>Activation 2FA</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        :root { color-scheme: light dark; }
-        *, *::before, *::after { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
-        header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; background: #0f1624; border-bottom: 1px solid #1f2937; }
-        h1 { margin: 0; font-size: 1.2rem; }
-        main { padding: 16px 20px; display: grid; gap: 16px; max-width: 900px; margin: 0 auto; }
-        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; box-shadow: 0 12px 28px rgba(0,0,0,0.24); }
-        code { background: #0f1624; padding: 4px 6px; border-radius: 6px; }
-        ul { padding-left: 18px; }
-        label { display: block; margin-top: 10px; font-weight: 600; }
-        input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; }
-        button { padding: 10px 14px; border: none; border-radius: 10px; background: linear-gradient(135deg, #3b82f6, #22d3ee); color: #0b1220; font-weight: 700; cursor: pointer; margin-top: 10px; }
-        .codes { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-top: 10px; }
-        .code { background: #0f1624; border: 1px dashed #1f2937; border-radius: 10px; padding: 8px 10px; font-family: monospace; }
-        .muted { color: #9ca3af; font-size: 0.95rem; }
-        .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .ghost-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0f1624; color: #e5e7eb; text-decoration: none; font-weight: 700; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app_shell.css') }}">
 </head>
-<body>
-    <header>
-        <h1>Activation 2FA Admin</h1>
-        <div class="actions">
-            <a class="ghost-btn" href="/">← Retour app</a>
-            <a class="ghost-btn" href="/admin/users">Utilisateurs</a>
+<body class="page-admin">
+    <header class="topbar">
+        <div class="topbar-inner container">
+            <h1>Activation 2FA Admin</h1>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/">← Retour app</a>
+                <a class="btn btn-ghost" href="/admin/users">Utilisateurs</a>
+            </div>
         </div>
     </header>
-    <main>
-        <section class="card">
-            <p>Scannez ce secret dans votre app TOTP (FreeOTP, Aegis, Google Authenticator...)</p>
-            <p>Secret: <code>{{ secret }}</code></p>
-            <p>URI: <code>{{ provisioning_uri }}</code></p>
+    <main class="container main-content">
+        <section class="card stack">
+            <div class="stack">
+                <p>Scannez ce secret dans votre app TOTP (FreeOTP, Aegis, Google Authenticator...).</p>
+                <div class="row wrap">
+                    <div class="stack">
+                        <span class="muted">Secret</span>
+                        <p id="secret-value">Secret: <code>{{ secret }}</code></p>
+                    </div>
+                    <button class="btn btn-ghost btn-mini" id="copy-secret" type="button">Copier</button>
+                </div>
+                <div class="row wrap">
+                    <div class="stack">
+                        <span class="muted">URI</span>
+                        <p id="uri-value">URI: <code>{{ provisioning_uri }}</code></p>
+                    </div>
+                    <button class="btn btn-ghost btn-mini" id="copy-uri" type="button">Copier</button>
+                </div>
+            </div>
             {% if twofa_enabled %}
-                <p>2FA déjà activée. Vous pouvez régénérer les codes de récupération ci-dessous.</p>
+                <p class="muted">2FA déjà activée. Vous pouvez régénérer les codes de récupération ci-dessous.</p>
             {% else %}
-                <p>Une fois scanné, saisissez un OTP ci-dessous pour activer.</p>
+                <p class="muted">Une fois scanné, saisissez un OTP ci-dessous pour activer.</p>
             {% endif %}
         </section>
 
-        <section class="card">
-            <h2>Codes de récupération</h2>
+        <section class="card stack">
+            <div class="row wrap between">
+                <h2>Codes de récupération</h2>
+                <button class="btn btn-ghost btn-mini" id="copy-codes" type="button">Copier tous les codes</button>
+            </div>
             <p>Copiez-les et stockez-les de manière sûre. Chaque code est utilisable une seule fois.</p>
-            <div class="codes" id="codes-container">
+            <div class="code-grid" id="codes-container">
                 {% if recovery_codes %}
                     {% for code in recovery_codes %}
                         <div class="code">{{ code }}</div>
@@ -62,33 +63,199 @@
             {% else %}
                 <p class="muted">Aucun code de récupération n’a encore été généré. Ils apparaîtront ici lors du premier setup.</p>
             {% endif %}
-            <div class="row">
-                <button id="regen-codes" type="button">Regenerate recovery codes</button>
+            <div class="row wrap">
+                <button class="btn btn-danger" id="regen-codes" type="button">Regenerate recovery codes</button>
                 <span id="regen-status" class="muted"></span>
             </div>
         </section>
 
-        <section class="card">
+        <section class="card stack">
             <h2>Valider l’OTP</h2>
-            <form id="verify-form">
+            <form id="verify-form" class="stack">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <label for="otp">Code à 6 chiffres</label>
-                <input id="otp" name="otp" inputmode="numeric" required>
-                <button type="submit">Valider</button>
+                <div class="field">
+                    <label for="otp">Code à 6 chiffres</label>
+                    <input id="otp" name="otp" inputmode="numeric" required>
+                </div>
+                <button class="btn btn-primary btn-block" type="submit">Valider</button>
             </form>
-            <div id="result"></div>
+            <div id="result" class="alert" hidden></div>
         </section>
     </main>
+
+    <div class="modal-backdrop" id="uiModalBackdrop" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uiModalTitle" aria-describedby="uiModalMessage">
+            <div class="modal-title" id="uiModalTitle">Confirmation</div>
+            <div class="modal-message" id="uiModalMessage"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="uiModalCancel" type="button">Annuler</button>
+                <button class="btn btn-primary" id="uiModalConfirm" type="button">Confirmer</button>
+            </div>
+        </div>
+    </div>
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
     <script>
         const csrfToken = "{{ csrf_token }}";
         const regenBtn = document.getElementById('regen-codes');
         const regenStatus = document.getElementById('regen-status');
         const codesContainer = document.getElementById('codes-container');
-        regenBtn.addEventListener('click', async () => {
-            if (!confirm('Regénérer les codes ? Les anciens seront invalidés.')) {
+        const result = document.getElementById('result');
+        const copySecretBtn = document.getElementById('copy-secret');
+        const copyUriBtn = document.getElementById('copy-uri');
+        const copyCodesBtn = document.getElementById('copy-codes');
+
+        function uiToast({ message = '', type = 'info', duration = 3200 } = {}) {
+            if (!message) return;
+            const region = document.getElementById('toastRegion');
+            if (!region) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            region.appendChild(toast);
+            setTimeout(() => toast.remove(), duration);
+        }
+
+        function uiConfirm(options = {}) {
+            const {
+                title = 'Confirmation',
+                message = '',
+                confirmText = 'Confirmer',
+                danger = false
+            } = options;
+            const backdrop = document.getElementById('uiModalBackdrop');
+            const titleEl = document.getElementById('uiModalTitle');
+            const messageEl = document.getElementById('uiModalMessage');
+            const cancelBtn = document.getElementById('uiModalCancel');
+            const confirmBtn = document.getElementById('uiModalConfirm');
+            if (!backdrop || !titleEl || !messageEl || !cancelBtn || !confirmBtn) {
+                return Promise.resolve(false);
+            }
+            return new Promise((resolve) => {
+                const lastActive = document.activeElement;
+                let resolved = false;
+
+                const cleanup = () => {
+                    document.removeEventListener('keydown', onKeydown);
+                    backdrop.removeEventListener('click', onBackdropClick);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                };
+
+                const close = (resultValue) => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    backdrop.classList.remove('is-open');
+                    setTimeout(() => {
+                        backdrop.hidden = true;
+                    }, 160);
+                    if (lastActive && typeof lastActive.focus === 'function') {
+                        lastActive.focus();
+                    }
+                    resolve(resultValue);
+                };
+
+                const trapFocus = (event) => {
+                    if (event.key !== 'Tab') return;
+                    const focusable = [cancelBtn, confirmBtn];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                };
+
+                const onKeydown = (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close(false);
+                        return;
+                    }
+                    trapFocus(event);
+                };
+
+                const onBackdropClick = (event) => {
+                    if (event.target === backdrop) close(false);
+                };
+
+                const onCancel = () => close(false);
+                const onConfirm = () => close(true);
+
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                confirmBtn.textContent = confirmText;
+                confirmBtn.classList.remove('btn-primary', 'btn-danger');
+                confirmBtn.classList.add(danger ? 'btn-danger' : 'btn-primary');
+
+                backdrop.hidden = false;
+                backdrop.classList.remove('is-open');
+                requestAnimationFrame(() => backdrop.classList.add('is-open'));
+                confirmBtn.focus();
+
+                document.addEventListener('keydown', onKeydown);
+                backdrop.addEventListener('click', onBackdropClick);
+                cancelBtn.addEventListener('click', onCancel);
+                confirmBtn.addEventListener('click', onConfirm);
+            });
+        }
+
+        async function copyText(text, label) {
+            if (!text) return;
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    textarea.remove();
+                }
+                uiToast({ message: `${label} copié`, type: 'success' });
+            } catch (err) {
+                uiToast({ message: `Impossible de copier ${label.toLowerCase()}`, type: 'error' });
+            }
+        }
+
+        copySecretBtn?.addEventListener('click', () => {
+            const value = document.querySelector('#secret-value code')?.textContent?.trim();
+            copyText(value, 'Secret');
+        });
+
+        copyUriBtn?.addEventListener('click', () => {
+            const value = document.querySelector('#uri-value code')?.textContent?.trim();
+            copyText(value, 'URI');
+        });
+
+        copyCodesBtn?.addEventListener('click', () => {
+            const codes = Array.from(codesContainer?.querySelectorAll('.code') || [])
+                .map((el) => el.textContent.trim())
+                .filter(Boolean)
+                .join('\\n');
+            if (!codes) {
+                uiToast({ message: 'Aucun code à copier.', type: 'info' });
                 return;
             }
+            copyText(codes, 'Codes');
+        });
+
+        regenBtn.addEventListener('click', async () => {
+            const confirmRegen = await uiConfirm({
+                title: 'Régénérer les codes',
+                message: 'Regénérer les codes ? Les anciens seront invalidés.',
+                confirmText: 'Régénérer',
+                danger: true
+            });
+            if (!confirmRegen) return;
             regenBtn.disabled = true;
             regenStatus.textContent = 'Génération...';
             try {
@@ -100,6 +267,7 @@
                 const data = await res.json();
                 if (res.ok && data.recovery_codes) {
                     regenStatus.textContent = 'Nouveaux codes générés (affichés ci-dessous).';
+                    uiToast({ message: 'Codes régénérés.', type: 'success' });
                     if (codesContainer) {
                         codesContainer.innerHTML = '';
                         data.recovery_codes.forEach((c) => {
@@ -110,10 +278,13 @@
                         });
                     }
                 } else {
-                    regenStatus.textContent = data.error || 'Erreur lors de la régénération.';
+                    const message = data.error || 'Erreur lors de la régénération.';
+                    regenStatus.textContent = message;
+                    uiToast({ message, type: 'error' });
                 }
             } catch (err) {
                 regenStatus.textContent = 'Erreur réseau lors de la régénération.';
+                uiToast({ message: 'Erreur réseau lors de la régénération.', type: 'error' });
             } finally {
                 regenBtn.disabled = false;
             }
@@ -129,13 +300,12 @@
                 credentials: 'same-origin'
             });
             const data = await res.json();
-            const result = document.getElementById('result');
-            if (res.ok) {
-                result.textContent = '2FA activée. Vous pouvez retourner sur /admin/users.';
-                result.style.color = '#34d399';
-            } else {
-                result.textContent = data.error || 'OTP invalide';
-                result.style.color = '#fca5a5';
+            if (result) {
+                result.hidden = false;
+                result.className = res.ok ? 'alert success' : 'alert error';
+                result.textContent = res.ok
+                    ? '2FA activée. Vous pouvez retourner sur /admin/users.'
+                    : (data.error || 'OTP invalide');
             }
         });
     </script>
