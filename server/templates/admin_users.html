@@ -71,9 +71,111 @@
             </div>
         </section>
     </main>
+    <div class="modal-backdrop" id="resetModalBackdrop" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle" aria-describedby="resetModalDesc">
+            <div class="modal-title" id="resetModalTitle">Réinitialiser le mot de passe</div>
+            <div class="modal-message" id="resetModalDesc">Saisissez un nouveau mot de passe pour l’utilisateur.</div>
+            <div class="field">
+                <label for="resetPasswordInput">Nouveau mot de passe</label>
+                <input id="resetPasswordInput" type="password" autocomplete="new-password" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="resetModalCancel" type="button">Annuler</button>
+                <button class="btn btn-primary" id="resetModalConfirm" type="button">Confirmer</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const csrfToken = "{{ csrf_token }}";
+        const resetModalBackdrop = document.getElementById('resetModalBackdrop');
+        const resetModalInput = document.getElementById('resetPasswordInput');
+        const resetModalCancel = document.getElementById('resetModalCancel');
+        const resetModalConfirm = document.getElementById('resetModalConfirm');
+
+        function openResetModal() {
+            if (!resetModalBackdrop || !resetModalInput || !resetModalCancel || !resetModalConfirm) {
+                return Promise.resolve('');
+            }
+            return new Promise((resolve) => {
+                const lastActive = document.activeElement;
+                let resolved = false;
+
+                const cleanup = () => {
+                    document.removeEventListener('keydown', onKeydown);
+                    resetModalBackdrop.removeEventListener('click', onBackdropClick);
+                    resetModalCancel.removeEventListener('click', onCancel);
+                    resetModalConfirm.removeEventListener('click', onConfirm);
+                };
+
+                const close = (value) => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    resetModalBackdrop.classList.remove('is-open');
+                    setTimeout(() => {
+                        resetModalBackdrop.hidden = true;
+                    }, 160);
+                    if (lastActive && typeof lastActive.focus === 'function') {
+                        lastActive.focus();
+                    }
+                    resolve(value);
+                };
+
+                const trapFocus = (event) => {
+                    if (event.key !== 'Tab') return;
+                    const focusable = [resetModalInput, resetModalCancel, resetModalConfirm];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                };
+
+                const onKeydown = (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close('');
+                        return;
+                    }
+                    if (event.key === 'Enter' && document.activeElement === resetModalInput) {
+                        event.preventDefault();
+                        onConfirm();
+                        return;
+                    }
+                    trapFocus(event);
+                };
+
+                const onBackdropClick = (event) => {
+                    if (event.target === resetModalBackdrop) close('');
+                };
+
+                const onCancel = () => close('');
+                const onConfirm = () => {
+                    const value = resetModalInput.value.trim();
+                    if (!value) {
+                        resetModalInput.focus();
+                        return;
+                    }
+                    close(value);
+                };
+
+                resetModalInput.value = '';
+                resetModalBackdrop.hidden = false;
+                resetModalBackdrop.classList.remove('is-open');
+                requestAnimationFrame(() => resetModalBackdrop.classList.add('is-open'));
+                resetModalInput.focus();
+
+                document.addEventListener('keydown', onKeydown);
+                resetModalBackdrop.addEventListener('click', onBackdropClick);
+                resetModalCancel.addEventListener('click', onCancel);
+                resetModalConfirm.addEventListener('click', onConfirm);
+            });
+        }
 
         function flash(msg, ok = true) {
             const el = document.getElementById('flash');
@@ -105,9 +207,9 @@
                     <td data-label="Actif"><span class="pill ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'actif' : 'inactif'}</span></td>
                     <td data-label="2FA">${u.twofa_enabled ? '✅' : '—'}</td>
                     <td data-label="Actions" class="admin-actions">
-                        <button class="btn-mini btn-secondary" data-action="save-email" data-id="${u.id}">Enregistrer email</button>
-                        <button class="btn-mini ${u.is_active ? 'btn-danger' : 'btn-secondary'}" data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
-                        <button class="btn-mini btn-danger" data-action="reset" data-id="${u.id}">Reset mot de passe</button>
+                        <button class="btn btn-secondary btn-mini" data-action="save-email" data-id="${u.id}">Enregistrer email</button>
+                        <button class="btn ${u.is_active ? 'btn-danger' : 'btn-secondary'} btn-mini" data-action="toggle" data-id="${u.id}">${u.is_active ? 'Désactiver' : 'Activer'}</button>
+                        <button class="btn btn-danger btn-mini" data-action="reset" data-id="${u.id}">Reset mot de passe</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -182,7 +284,7 @@
                 }
             }
             if (action === 'reset') {
-                const pwd = prompt('Nouveau mot de passe:');
+                const pwd = await openResetModal();
                 if (!pwd) return;
                 const res = await fetch(`/api/admin/users/${id}/reset-password`, {
                     method: 'POST',

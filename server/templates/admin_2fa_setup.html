@@ -24,14 +24,14 @@
                 <div class="row wrap">
                     <div class="stack">
                         <span class="muted">Secret</span>
-                        <code class="code-token" id="secret-value">{{ secret }}</code>
+                        <p id="secret-value">Secret: <code>{{ secret }}</code></p>
                     </div>
                     <button class="btn btn-ghost btn-mini" id="copy-secret" type="button">Copier</button>
                 </div>
                 <div class="row wrap">
                     <div class="stack">
                         <span class="muted">URI</span>
-                        <code class="code-token" id="uri-value">{{ provisioning_uri }}</code>
+                        <p id="uri-value">URI: <code>{{ provisioning_uri }}</code></p>
                     </div>
                     <button class="btn btn-ghost btn-mini" id="copy-uri" type="button">Copier</button>
                 </div>
@@ -52,7 +52,7 @@
             <div class="code-grid" id="codes-container">
                 {% if recovery_codes %}
                     {% for code in recovery_codes %}
-                        <div class="code-token">{{ code }}</div>
+                        <div class="code">{{ code }}</div>
                     {% endfor %}
                 {% endif %}
             </div>
@@ -189,8 +189,8 @@
                 titleEl.textContent = title;
                 messageEl.textContent = message;
                 confirmBtn.textContent = confirmText;
-                confirmBtn.classList.toggle('btn-danger', Boolean(danger));
-                confirmBtn.classList.toggle('btn-primary', !danger);
+                confirmBtn.classList.remove('btn-primary', 'btn-danger');
+                confirmBtn.classList.add(danger ? 'btn-danger' : 'btn-primary');
 
                 backdrop.hidden = false;
                 backdrop.classList.remove('is-open');
