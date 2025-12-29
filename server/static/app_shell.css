@@ -322,6 +322,15 @@ textarea:focus-visible,
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+code {
+    background: #0f1624;
+    padding: 4px 6px;
+    border-radius: 6px;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.code,
 .code-token {
     background: #0f1624;
     border: 1px dashed rgba(148,163,184,0.3);

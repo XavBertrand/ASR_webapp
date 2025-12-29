@@ -227,17 +227,17 @@
         }
 
         copySecretBtn?.addEventListener('click', () => {
-            const value = document.getElementById('secret-value')?.textContent?.trim();
+            const value = document.querySelector('#secret-value code')?.textContent?.trim();
             copyText(value, 'Secret');
         });
 
         copyUriBtn?.addEventListener('click', () => {
-            const value = document.getElementById('uri-value')?.textContent?.trim();
+            const value = document.querySelector('#uri-value code')?.textContent?.trim();
             copyText(value, 'URI');
         });
 
         copyCodesBtn?.addEventListener('click', () => {
-            const codes = Array.from(codesContainer?.querySelectorAll('.code-token') || [])
+            const codes = Array.from(codesContainer?.querySelectorAll('.code') || [])
                 .map((el) => el.textContent.trim())
                 .filter(Boolean)
                 .join('\\n');
@@ -272,7 +272,7 @@
                         codesContainer.innerHTML = '';
                         data.recovery_codes.forEach((c) => {
                             const div = document.createElement('div');
-                            div.className = 'code-token';
+                            div.className = 'code';
                             div.textContent = c;
                             codesContainer.appendChild(div);
                         });
