@@ -327,6 +327,33 @@ def _is_safe_run_id(run_id: str) -> bool:
     return True
 
 
+def _safe_user_folder(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    safe = secure_filename(value).strip("._")
+    return safe or None
+
+
+def _resolve_user_folder(payload: dict[str, Any] | None = None) -> str:
+    requested = _safe_user_folder((payload or {}).get("user_folder"))
+    if getattr(g, "current_user", None) and g.current_user.role == "admin" and requested:
+        return requested
+    return current_user_folder()
+
+
+def _iter_user_run_dirs(root: Path, folder_name: str) -> list[tuple[str, Path]]:
+    if not root.is_dir():
+        return []
+    items: list[tuple[str, Path]] = []
+    for entry in root.iterdir():
+        if not entry.is_dir():
+            continue
+        target = entry / folder_name
+        if target.is_dir():
+            items.append((entry.name, target))
+    return items
+
+
 def _update_run_metadata(run_root: Path, *, user_folder: str, old_run_id: str, new_run_id: str) -> None:
     old_root = str(Path(user_folder) / "runs" / old_run_id)
     new_root = str(Path(user_folder) / "runs" / new_run_id)
@@ -400,7 +427,15 @@ def _collect_run_entries(
         if not manifest:
             continue
         run_id = manifest.get("run_id") or manifest_path.parent.name
-        meta = manifest.get("meta") or {}
+        meta = manifest.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+        meta_path = manifest_path.parent / "meta.json"
+        meta_file = _load_meta(meta_path) if meta_path.exists() else None
+        if isinstance(meta_file, dict):
+            merged = dict(meta_file)
+            merged.update(meta)
+            meta = merged
         audio = manifest.get("audio") or {}
         artifacts = manifest.get("artifacts") or []
         raw_case_name = meta.get("case_name")
@@ -1279,10 +1314,28 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/reports")
     @login_required
     def list_reports():
-        user_folder = current_user_folder()
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
-        runs_root = root / user_folder / "runs"
-        items = _collect_run_entries(runs_root, root, allow_downloads=True)
+        items: list[dict[str, Any]] = []
+        if g.current_user and g.current_user.role == "admin":
+            user_map = {
+                secure_filename(user.username).strip("._"): user.username
+                for user in User.query.all()
+            }
+            for user_folder, runs_root in _iter_user_run_dirs(root, "runs"):
+                entries = _collect_run_entries(runs_root, root, allow_downloads=True)
+                username = user_map.get(user_folder, user_folder)
+                for entry in entries:
+                    entry["user_folder"] = user_folder
+                    entry["username"] = username
+                items.extend(entries)
+        else:
+            user_folder = current_user_folder()
+            runs_root = root / user_folder / "runs"
+            items = _collect_run_entries(runs_root, root, allow_downloads=True)
+            username = g.current_user.username if g.current_user else user_folder
+            for entry in items:
+                entry["user_folder"] = user_folder
+                entry["username"] = username
 
         items.sort(
             key=lambda entry: _parse_iso_timestamp(entry.get("uploaded_at")) or 0,
@@ -1299,7 +1352,7 @@ def register_routes(app: Flask) -> None:
         case_name = (payload.get("case_name") or "").strip()
         if len(case_name) > 160:
             return json_error("Nom du dossier trop long (max 160 caractères)", 400)
-        user_folder = current_user_folder()
+        user_folder = _resolve_user_folder(payload)
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
         run_root = root / user_folder / "runs" / run_id
         if not run_root.is_dir():
@@ -1312,7 +1365,8 @@ def register_routes(app: Flask) -> None:
     def rerun_report(run_id: str):
         if not _is_safe_run_id(run_id):
             return json_error("Identifiant invalide", 400)
-        user_folder = current_user_folder()
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
         run_root = root / user_folder / "runs" / run_id
         if not run_root.is_dir():
@@ -1363,7 +1417,8 @@ def register_routes(app: Flask) -> None:
     def trash_run(run_id: str):
         if not _is_safe_run_id(run_id):
             return json_error("Identifiant invalide", 400)
-        user_folder = current_user_folder()
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
         run_root = root / user_folder / "runs" / run_id
         if not run_root.is_dir():
@@ -1384,16 +1439,40 @@ def register_routes(app: Flask) -> None:
     @app.get("/api/trash")
     @login_required
     def list_trash():
-        user_folder = current_user_folder()
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
-        trash_root = root / user_folder / "trash"
-        items = _collect_run_entries(
-            trash_root,
-            root,
-            allow_downloads=False,
-            status_override="trashed",
-            include_trash_time=True,
-        )
+        items: list[dict[str, Any]] = []
+        if g.current_user and g.current_user.role == "admin":
+            user_map = {
+                secure_filename(user.username).strip("._"): user.username
+                for user in User.query.all()
+            }
+            for user_folder, trash_root in _iter_user_run_dirs(root, "trash"):
+                entries = _collect_run_entries(
+                    trash_root,
+                    root,
+                    allow_downloads=False,
+                    status_override="trashed",
+                    include_trash_time=True,
+                )
+                username = user_map.get(user_folder, user_folder)
+                for entry in entries:
+                    entry["user_folder"] = user_folder
+                    entry["username"] = username
+                items.extend(entries)
+        else:
+            user_folder = current_user_folder()
+            trash_root = root / user_folder / "trash"
+            items = _collect_run_entries(
+                trash_root,
+                root,
+                allow_downloads=False,
+                status_override="trashed",
+                include_trash_time=True,
+            )
+            username = g.current_user.username if g.current_user else user_folder
+            for entry in items:
+                entry["user_folder"] = user_folder
+                entry["username"] = username
         items.sort(
             key=lambda entry: _parse_iso_timestamp(entry.get("trashed_at")) or 0,
             reverse=True,
@@ -1405,7 +1484,8 @@ def register_routes(app: Flask) -> None:
     def restore_trash(run_id: str):
         if not _is_safe_run_id(run_id):
             return json_error("Identifiant invalide", 400)
-        user_folder = current_user_folder()
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
         trash_root = root / user_folder / "trash" / run_id
         if not trash_root.is_dir():
@@ -1426,7 +1506,8 @@ def register_routes(app: Flask) -> None:
     def delete_trash(run_id: str):
         if not _is_safe_run_id(run_id):
             return json_error("Identifiant invalide", 400)
-        user_folder = current_user_folder()
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
         root = Path(app.config["REPORTS_ROOT"]).expanduser()
         trash_root = root / user_folder / "trash" / run_id
         if not trash_root.is_dir():
