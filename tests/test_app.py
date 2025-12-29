@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pyotp
@@ -192,7 +192,7 @@ def test_upload_requires_login_and_works(client, app, tmp_path):
     meta_path = tmp_path / "uploads" / user_folder / f"{saved_name.rsplit('.', 1)[0]}_meta.json"
     metadata = json.loads(meta_path.read_text())
     assert metadata["saved_filename"] == saved_name
-    assert metadata["meeting_date"] == datetime.utcnow().date().isoformat()
+    assert metadata["meeting_date"] == datetime.now(timezone.utc).date().isoformat()
 
 
 def parse_secret_from_html(html: str) -> str:
@@ -512,7 +512,7 @@ def test_reset_token_single_use(client, app, caplog):
     with app.app_context():
         tokens = PasswordResetToken.query.filter_by(user_id=user_id).all()
         assert tokens and all(t.used_at is not None for t in tokens)
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         assert verify_password(user.password_hash, "NewPassword123")
 
 
@@ -531,7 +531,7 @@ def test_reset_token_expired(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() - timedelta(minutes=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         )
         db.session.add(token)
         db.session.commit()
@@ -564,7 +564,7 @@ def test_password_policy_enforced_for_admin_reset(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add(token)
         db.session.commit()
@@ -617,12 +617,12 @@ def test_reset_invalidates_other_tokens(client, app):
         t1 = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw1),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         t2 = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw2),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add_all([t1, t2])
         db.session.commit()
@@ -652,7 +652,7 @@ def test_admin_can_set_and_clear_email(client, app):
     res = admin_update_email(client, user_id, "NewEmail@Example.com", verified=True)
     assert res.status_code == 200
     with app.app_context():
-        refreshed = User.query.get(user_id)
+        refreshed = db.session.get(User, user_id)
         assert refreshed.email == "newemail@example.com"
         assert refreshed.email_verified is True
         audit = AuditLog.query.filter_by(action="admin_user_email_updated", target_user_id=user_id).order_by(
@@ -662,7 +662,7 @@ def test_admin_can_set_and_clear_email(client, app):
     res_clear = admin_update_email(client, user_id, "", verified=False)
     assert res_clear.status_code == 200
     with app.app_context():
-        refreshed = User.query.get(user_id)
+        refreshed = db.session.get(User, user_id)
         assert refreshed.email is None
         assert refreshed.email_verified is False
 
@@ -702,7 +702,7 @@ def test_email_change_invalidates_reset_tokens(client, app):
         token = PasswordResetToken(
             user_id=user.id,
             token_hash=hash_reset_token(raw),
-            expires_at=datetime.utcnow() + timedelta(minutes=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         )
         db.session.add(token)
         db.session.commit()

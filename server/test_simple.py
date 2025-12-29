@@ -7,7 +7,7 @@ def home():
     return "SERVEUR TEST OK!"
 
 @app.route('/test')
-def test():
+def ping():
     return "TEST REUSSI!"
 
 if __name__ == '__main__':
