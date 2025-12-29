@@ -31,6 +31,7 @@
             --warn: #fbbf24;
             --success: #22c55e;
             --sys-inset-bottom: 0px; /* ANDROID NAV BAR INSET */
+            --safe-inset-bottom: max(var(--sys-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)); /* UX: SAFE AREA COMBO */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -220,8 +221,8 @@
             padding-right: 18px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
-            scroll-padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + env(safe-area-inset-bottom, 0px) + 32px);
+            padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + var(--safe-inset-bottom, 0px) + 32px); /* UX: SAFE AREA */
+            scroll-padding-bottom: calc(var(--controls-h, 0px) + var(--android-nav, 0px) + var(--safe-inset-bottom, 0px) + 32px); /* UX: SAFE AREA */
         }
         .content { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
         .tab-panel { display: none; }
@@ -307,7 +308,7 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
             box-shadow: 0 4px 14px rgba(0,0,0,0.12);
         }
-        .bottom-spacer { height: calc(var(--controls-h, 0px) + 32px); } /* BOTTOM SPACER */
+        .bottom-spacer { height: calc(var(--controls-h, 0px) + var(--safe-inset-bottom, 0px) + 32px); } /* UX: SAFE AREA BOTTOM SPACER */
 
         /* FIXED FOOTER BAR (grid row keeps it always visible) */
         /* FIXED FOOTER */
@@ -321,7 +322,7 @@
             background: rgba(15,23,42,0.94);
             border-top: 1px solid var(--stroke);
             box-shadow: 0 -8px 22px rgba(0,0,0,0.28);
-            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); /* SAFE AREA */
+            padding: 10px 12px calc(10px + var(--safe-inset-bottom, 0px)); /* UX: SAFE AREA */
             z-index: 40;
         }
         .controls-inner {
@@ -356,6 +357,17 @@
         .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .btn:disabled { color: #606b7a; border-color: #1f2937; background: #0f1624; box-shadow: none; }
         .btn.active { border-color: var(--primary); box-shadow: 0 0 0 1px rgba(96,165,250,0.4); }
+        .btn-spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            border: 2px solid rgba(15, 23, 42, 0.35);
+            border-top-color: currentColor;
+            display: none;
+            animation: spin 0.9s linear infinite;
+        }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+        .btn.is-loading .icon { opacity: 0.5; }
 
         .btn-main {
             background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -395,13 +407,25 @@
             border-radius: 12px;
             padding: 14px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
         .form-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
         .form-header h2 { font-size: 1rem; color: var(--text-main); }
         .form-header small { color: var(--text-sub); font-size: 0.9rem; display: block; margin-top: 2px; }
-        .form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .form-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
         .field { display: flex; flex-direction: column; gap: 6px; }
-        .field label { font-weight: 600; color: var(--text-sub); font-size: 0.95rem; }
+        .field label { font-weight: 600; color: var(--text-sub); font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .field-tag {
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--stroke);
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
         .field small { color: var(--text-sub); font-size: 0.85rem; }
         .field input,
         .field select,
@@ -441,7 +465,50 @@
             gap: 8px;
             align-items: center;
         }
+        /* UX: ADVANCED METADATA */
+        .meta-advanced {
+            border: 1px dashed var(--stroke);
+            border-radius: 12px;
+            padding: 10px 12px;
+            background: rgba(15,22,36,0.65);
+        }
+        .meta-advanced summary {
+            list-style: none;
+            cursor: pointer;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .meta-advanced summary::-webkit-details-marker { display: none; }
+        .meta-advanced summary::after {
+            content: "▾";
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            transition: transform 0.2s ease;
+        }
+        .meta-advanced[open] summary::after { transform: rotate(-180deg); }
+        .meta-advanced .form-grid { margin-top: 12px; }
         .history-panel { gap: 10px; }
+        .history-tools {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            margin-top: 10px;
+        }
+        .history-field { display: flex; flex-direction: column; gap: 6px; }
+        .history-field label { font-size: 0.8rem; color: var(--text-sub); font-weight: 600; }
+        .history-input {
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 999px;
+            padding: 8px 12px;
+            color: var(--text-main);
+            font-size: 0.9rem;
+        }
+        .history-input:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
         .history-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
         .history-item {
             display: flex;
@@ -463,6 +530,56 @@
         .history-title { font-weight: 700; color: var(--text-main); }
         .history-meta { color: var(--text-sub); font-size: 0.85rem; }
         .history-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .history-menu-wrap { position: relative; }
+        .history-menu-trigger {
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 700;
+            cursor: pointer;
+            min-width: 40px;
+        }
+        .history-menu-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .history-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            min-width: 180px;
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 12px;
+            padding: 6px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            z-index: 25;
+        }
+        .history-menu[hidden] { display: none; }
+        .history-menu-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .history-menu-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .history-menu-item:disabled,
+        .history-menu-item[aria-disabled="true"] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .history-menu-item.danger {
+            border-color: rgba(248,113,113,0.45);
+            background: rgba(127,29,29,0.35);
+            color: #fecaca;
+        }
         .status-pill {
             padding: 4px 8px;
             border-radius: 999px;
@@ -519,6 +636,88 @@
         }
         .artifact-name { color: var(--text-main); font-weight: 600; }
         .artifact-meta { font-size: 0.75rem; color: var(--text-sub); }
+        /* UX: MODAL + TOAST */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(6,9,15,0.78);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            z-index: 60;
+        }
+        .modal-backdrop[hidden] { display: none; }
+        .modal {
+            width: min(420px, 100%);
+            background: #0f1624;
+            border: 1px solid var(--stroke);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .modal-title { font-size: 1rem; font-weight: 700; }
+        .modal-message { color: var(--text-sub); font-size: 0.95rem; line-height: 1.4; }
+        .modal-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .modal-btn {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .modal-btn.primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #0b1220;
+            border: none;
+        }
+        .modal-btn.danger {
+            border-color: rgba(248,113,113,0.45);
+            background: rgba(127,29,29,0.35);
+            color: #fecaca;
+        }
+        .toast-region {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: calc(var(--controls-h, 0px) + var(--safe-inset-bottom, 0px) + 12px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 70;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--stroke);
+            background: #111827;
+            color: var(--text-main);
+            font-weight: 600;
+            box-shadow: 0 10px 22px rgba(0,0,0,0.24);
+        }
+        .toast.success { border-color: rgba(34,197,94,0.4); color: #bbf7d0; }
+        .toast.error { border-color: rgba(248,113,113,0.45); color: #fecaca; }
+        .toast.info { border-color: rgba(96,165,250,0.4); color: #dbeafe; }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
 
         @media (max-width: 640px) {
             main.page {
@@ -546,7 +745,7 @@
             .history-actions {
                 width: 100%;
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                grid-template-columns: repeat(3, minmax(0, 1fr));
                 justify-content: start;
             }
             .history-actions .status-pill {
@@ -554,6 +753,10 @@
                 justify-self: start;
             }
             .history-actions .btn-mini {
+                width: 100%;
+                text-align: center;
+            }
+            .history-menu-trigger {
                 width: 100%;
                 text-align: center;
             }
@@ -749,21 +952,11 @@
                         <svg class="icon" style="color:var(--warn);" aria-hidden="true"><use href="#icon-warning"></use></svg>
                         <span id="metaWarningText">Champs requis manquants.</span>
                     </div>
-                    <div class="form-grid">
+                    <div class="form-grid form-grid-essentials">
                         <div class="field" id="fieldCaseName">
-                            <label for="inputCaseName">Nom du dossier</label>
+                            <label for="inputCaseName"><span>Nom du dossier</span><span class="field-tag">Optionnel</span></label>
                             <input type="text" id="inputCaseName" maxlength="160" placeholder="Ex: Affaire Dupont - licenciement" />
                             <small>Optionnel, sert de titre principal dans l'historique.</small>
-                        </div>
-                        <div class="field" id="fieldAsrPrompt">
-                            <label for="inputAsrPrompt">Mots spécifiques</label>
-                            <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
-                            <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
-                        </div>
-                        <div class="field" id="fieldSpeakerContext">
-                            <label for="inputSpeakerContext">Contexte intervenants</label>
-                            <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
-                            <small>Description des roles/participants.</small>
                         </div>
                         <div class="field" id="fieldMeetingDate">
                             <label for="inputMeetingDate">Date de l'entretien</label>
@@ -781,6 +974,21 @@
                             <small>Choix unique parmi les catégories configurées.</small>
                         </div>
                     </div>
+                    <details class="meta-advanced" id="metaAdvanced">
+                        <summary>Avancé <span class="field-tag">Optionnel</span></summary>
+                        <div class="form-grid">
+                            <div class="field" id="fieldAsrPrompt">
+                                <label for="inputAsrPrompt"><span>Mots spécifiques</span><span class="field-tag">Optionnel</span></label>
+                                <textarea id="inputAsrPrompt" placeholder="Mots clés ou contexte pour guider la transcription."></textarea>
+                                <small>Courts mots clés pour orienter la reconnaissance audio (restent locaux).</small>
+                            </div>
+                            <div class="field" id="fieldSpeakerContext">
+                                <label for="inputSpeakerContext"><span>Contexte intervenants</span><span class="field-tag">Optionnel</span></label>
+                                <textarea id="inputSpeakerContext" placeholder="Ex: SPK_1 (avocat) avec SPK_2 (client)."></textarea>
+                                <small>Description des roles/participants.</small>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
         </section>
@@ -793,6 +1001,20 @@
                             <select id="historyUserFilter" class="history-filter hidden" aria-label="Filtrer par utilisateur"></select>
                             <button class="link-btn" id="toggleTrash">Corbeille</button>
                             <button class="link-btn" id="refreshReports">Actualiser</button>
+                        </div>
+                    </div>
+                    <div class="history-tools">
+                        <div class="history-field">
+                            <label for="historySearch">Rechercher</label>
+                            <input class="history-input" type="search" id="historySearch" placeholder="Rechercher un dossier, type, date..." autocomplete="off" />
+                        </div>
+                        <div class="history-field">
+                            <label for="historySort">Trier par</label>
+                            <select class="history-input" id="historySort">
+                                <option value="date_desc" selected>Date ↓</option>
+                                <option value="date_asc">Date ↑</option>
+                                <option value="name_asc">Nom A→Z</option>
+                            </select>
                         </div>
                     </div>
                     <div class="muted" id="reportsHint">Les rapports apparaissent ici dès l'envoi.</div>
@@ -826,6 +1048,7 @@
                 <button class="btn" id="btnUpload" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-cloud_upload"></use></svg>
                     <span>Envoyer</span>
+                    <span class="btn-spinner" aria-hidden="true"></span>
                 </button>
             </div>
         </div>
@@ -836,6 +1059,18 @@
         <div class="loader-spinner"></div>
         <p style="color:var(--text-main); font-weight: 600;">Transcription et anonymisation en cours...</p>
     </div>
+    <!-- UX: CONFIRM MODAL + TOAST -->
+    <div class="modal-backdrop" id="uiModalBackdrop" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uiModalTitle" aria-describedby="uiModalMessage">
+            <div class="modal-title" id="uiModalTitle">Confirmation</div>
+            <div class="modal-message" id="uiModalMessage"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="uiModalCancel" type="button">Annuler</button>
+                <button class="modal-btn primary" id="uiModalConfirm" type="button">Confirmer</button>
+            </div>
+        </div>
+    </div>
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
     <script>
         class RecorderApp {
@@ -873,8 +1108,17 @@
                 this.isAdmin = this.currentUser?.role === 'admin';
                 this.lastReports = [];
                 this.userFilterValue = 'all';
+                this.reportSearchQuery = '';
+                this.reportSearchToken = '';
+                this.reportSortMode = 'date_desc';
+                this.historySearchDebounce = null;
+                this.activeHistoryMenu = null;
+                this.activeHistoryMenuTrigger = null;
+                this.activeHistoryMenuItems = [];
+                this.isUploading = false;
 
                 this.initElements();
+                this.reportSortMode = this.historySortSelect?.value || this.reportSortMode;
                 this.updateHistoryHeader();
                 this.syncAdminUi();
                 this.initReportTypesFromSelect();
@@ -958,6 +1202,8 @@
                 this.toggleTrashBtn = document.getElementById('toggleTrash');
                 this.historyTitle = document.getElementById('historyTitle');
                 this.historyUserFilter = document.getElementById('historyUserFilter');
+                this.historySearchInput = document.getElementById('historySearch');
+                this.historySortSelect = document.getElementById('historySort');
 
                 // Metadata
                 this.inputCaseName = document.getElementById('inputCaseName');
@@ -1006,6 +1252,17 @@
                         this.renderReports(this.lastReports);
                     });
                 }
+                if (this.historySearchInput) {
+                    this.historySearchInput.addEventListener('input', () => this.handleHistorySearchInput());
+                }
+                if (this.historySortSelect) {
+                    this.historySortSelect.addEventListener('change', () => {
+                        this.reportSortMode = this.historySortSelect.value || 'date_desc';
+                        this.renderReports(this.lastReports);
+                    });
+                }
+                document.addEventListener('click', (event) => this.handleHistoryMenuDocumentClick(event));
+                document.addEventListener('keydown', (event) => this.handleHistoryMenuDocumentKeydown(event));
 
                 // Metadata persistence
                 const metaInputs = [
@@ -1299,10 +1556,140 @@
             }
 
             filterReports(reports) {
-                if (!this.isAdmin) return reports;
-                const value = this.userFilterValue || this.historyUserFilter?.value || 'all';
-                if (!value || value === 'all') return reports;
-                return reports.filter((report) => this.getReportOwnerValue(report) === value);
+                let next = Array.isArray(reports) ? reports : [];
+                if (this.isAdmin) {
+                    const value = this.userFilterValue || this.historyUserFilter?.value || 'all';
+                    if (value && value !== 'all') {
+                        next = next.filter((report) => this.getReportOwnerValue(report) === value);
+                    }
+                }
+                const token = this.reportSearchToken;
+                if (token) {
+                    next = next.filter((report) => {
+                        const haystack = this.normalizeText(this.buildReportSearchText(report));
+                        return haystack.includes(token);
+                    });
+                }
+                return next;
+            }
+
+            // UX: SEARCH + SORT
+            handleHistorySearchInput() {
+                if (this.historySearchDebounce) clearTimeout(this.historySearchDebounce);
+                const value = this.historySearchInput?.value || '';
+                this.historySearchDebounce = setTimeout(() => {
+                    this.reportSearchQuery = value.trim();
+                    this.reportSearchToken = this.normalizeText(this.reportSearchQuery);
+                    this.renderReports(this.lastReports);
+                }, 200);
+            }
+
+            normalizeText(value) {
+                return String(value || '')
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+            }
+
+            buildReportSearchText(report) {
+                if (!report) return '';
+                const typeLabel = this.reportTypeLabels[report.meeting_report_type] || report.meeting_report_type || '';
+                const parts = [
+                    report.case_name,
+                    report.meeting_date,
+                    typeLabel,
+                    report.report_created_at,
+                    report.uploaded_at,
+                    report.display_name,
+                    report.report_filename,
+                    report.run_id,
+                    report.id,
+                    report.username,
+                    report.user_folder
+                ];
+                return parts.filter(Boolean).join(' ');
+            }
+
+            sortReports(reports) {
+                const list = Array.isArray(reports) ? reports.slice() : [];
+                const mode = this.reportSortMode || 'date_desc';
+                if (mode === 'name_asc') {
+                    return list.sort((a, b) => this.buildReportTitle(a).localeCompare(this.buildReportTitle(b), 'fr', { sensitivity: 'base' }));
+                }
+                const direction = mode === 'date_asc' ? 1 : -1;
+                return list.sort((a, b) => (this.getReportSortTimestamp(a) - this.getReportSortTimestamp(b)) * direction);
+            }
+
+            getReportSortTimestamp(report) {
+                const raw = report?.report_created_at || report?.uploaded_at || report?.meeting_date || report?.trashed_at || '';
+                if (!raw) return 0;
+                const date = new Date(raw);
+                return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+            }
+
+            // UX: HISTORY OVERFLOW MENU
+            openHistoryMenu(menu, trigger) {
+                if (!menu || !trigger) return;
+                this.closeHistoryMenu({ returnFocus: false });
+                this.activeHistoryMenu = menu;
+                this.activeHistoryMenuTrigger = trigger;
+                this.activeHistoryMenuItems = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+                menu.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+                this.setMenuItemsTabIndex(menu, 0);
+                const first = this.activeHistoryMenuItems[0];
+                if (first) first.focus();
+            }
+
+            closeHistoryMenu(options = { returnFocus: true }) {
+                if (!this.activeHistoryMenu) return;
+                this.activeHistoryMenu.hidden = true;
+                this.setMenuItemsTabIndex(this.activeHistoryMenu, -1);
+                if (this.activeHistoryMenuTrigger) {
+                    this.activeHistoryMenuTrigger.setAttribute('aria-expanded', 'false');
+                    if (options.returnFocus) {
+                        this.activeHistoryMenuTrigger.focus();
+                    }
+                }
+                this.activeHistoryMenu = null;
+                this.activeHistoryMenuTrigger = null;
+                this.activeHistoryMenuItems = [];
+            }
+
+            setMenuItemsTabIndex(menu, value) {
+                if (!menu) return;
+                menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+                    item.tabIndex = value;
+                });
+            }
+
+            handleHistoryMenuDocumentClick(event) {
+                if (!this.activeHistoryMenu || !this.activeHistoryMenuTrigger) return;
+                if (this.activeHistoryMenu.contains(event.target) || this.activeHistoryMenuTrigger.contains(event.target)) return;
+                this.closeHistoryMenu();
+            }
+
+            handleHistoryMenuDocumentKeydown(event) {
+                if (!this.activeHistoryMenu) return;
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.closeHistoryMenu();
+                }
+            }
+
+            trapHistoryMenuFocus(event) {
+                if (!this.activeHistoryMenu || event.key !== 'Tab') return;
+                const items = this.activeHistoryMenuItems;
+                if (!items.length) return;
+                const first = items[0];
+                const last = items[items.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
             }
 
             toggleTrashView() {
@@ -1400,12 +1787,13 @@
                     if (!res.ok) {
                         const errorPayload = await res.json().catch(() => ({}));
                         const message = errorPayload.error || `Relance impossible (${res.status})`;
-                        alert(message);
+                        uiToast({ message, type: 'error' });
                         return;
                     }
                     await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Relance demandée.', type: 'success' });
                 } catch (err) {
-                    alert("Impossible de relancer le rapport.");
+                    uiToast({ message: "Impossible de relancer le rapport.", type: 'error' });
                 }
             }
 
@@ -1424,12 +1812,13 @@
                     if (!res.ok) {
                         const errorPayload = await res.json().catch(() => ({}));
                         const message = errorPayload.error || `Suppression impossible (${res.status})`;
-                        alert(message);
+                        uiToast({ message, type: 'error' });
                         return;
                     }
                     await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Run déplacé vers la corbeille.', type: 'success' });
                 } catch (err) {
-                    alert("Impossible de déplacer vers la corbeille.");
+                    uiToast({ message: "Impossible de déplacer vers la corbeille.", type: 'error' });
                 }
             }
 
@@ -1448,12 +1837,13 @@
                     if (!res.ok) {
                         const errorPayload = await res.json().catch(() => ({}));
                         const message = errorPayload.error || `Restauration impossible (${res.status})`;
-                        alert(message);
+                        uiToast({ message, type: 'error' });
                         return;
                     }
                     await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Run restauré.', type: 'success' });
                 } catch (err) {
-                    alert("Impossible de restaurer ce run.");
+                    uiToast({ message: "Impossible de restaurer ce run.", type: 'error' });
                 }
             }
 
@@ -1472,12 +1862,13 @@
                     if (!res.ok) {
                         const errorPayload = await res.json().catch(() => ({}));
                         const message = errorPayload.error || `Suppression impossible (${res.status})`;
-                        alert(message);
+                        uiToast({ message, type: 'error' });
                         return;
                     }
                     await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Run supprimé définitivement.', type: 'success' });
                 } catch (err) {
-                    alert("Impossible de supprimer définitivement ce run.");
+                    uiToast({ message: "Impossible de supprimer définitivement ce run.", type: 'error' });
                 }
             }
 
@@ -1485,9 +1876,12 @@
                 if (!this.reportList) return;
                 const sourceReports = Array.isArray(reports) ? reports : [];
                 this.updateUserFilterOptions(sourceReports);
+                // UX: CLOSE OPEN MENUS BEFORE RE-RENDER
+                this.closeHistoryMenu({ returnFocus: false });
                 const filteredReports = this.filterReports(sourceReports);
+                const preparedReports = this.sortReports(filteredReports);
                 this.reportList.innerHTML = '';
-                if (!filteredReports.length) {
+                if (!preparedReports.length) {
                     if (this.reportEmpty) this.reportEmpty.classList.remove('hidden');
                     return;
                 }
@@ -1503,7 +1897,7 @@
                     trashed: { label: 'Corbeille', className: 'status-missing' }
                 };
 
-                filteredReports.forEach((report) => {
+                preparedReports.forEach((report, index) => {
                     const item = document.createElement('div');
                     item.className = 'history-item';
 
@@ -1548,32 +1942,13 @@
                     pill.textContent = status.label;
                     actions.appendChild(pill);
 
-                    const download = document.createElement('a');
-                    download.className = 'btn-mini';
-                    download.textContent = 'PDF';
                     if (!this.showTrash && report.download_url) {
+                        const download = document.createElement('a');
+                        download.className = 'btn-mini';
+                        download.textContent = 'PDF';
                         download.href = report.download_url;
                         download.setAttribute('download', '');
-                    } else {
-                        download.setAttribute('aria-disabled', 'true');
-                    }
-                    actions.appendChild(download);
-
-                    if (!this.showTrash) {
-                        const canRerun = report.status === 'ready';
-                        const rerunBtn = document.createElement('button');
-                        rerunBtn.className = 'btn-mini';
-                        rerunBtn.type = 'button';
-                        rerunBtn.textContent = 'Relancer';
-                        if (!canRerun) {
-                            rerunBtn.setAttribute('aria-disabled', 'true');
-                        }
-                        rerunBtn.addEventListener('click', () => {
-                            if (!canRerun) return;
-                            if (!confirm('Relancer la génération du rapport ?')) return;
-                            this.rerunReport(report);
-                        });
-                        actions.appendChild(rerunBtn);
+                        actions.appendChild(download);
                     }
 
                     const filesBtn = document.createElement('button');
@@ -1581,52 +1956,142 @@
                     filesBtn.type = 'button';
                     filesBtn.textContent = 'Fichiers';
                     actions.appendChild(filesBtn);
+                    const detailsId = `history-details-${report.run_id || report.id || index}`;
+                    filesBtn.setAttribute('aria-expanded', 'false');
+                    filesBtn.setAttribute('aria-controls', detailsId);
+
+                    const menuWrap = document.createElement('div');
+                    menuWrap.className = 'history-menu-wrap';
+                    const menuTrigger = document.createElement('button');
+                    menuTrigger.className = 'history-menu-trigger';
+                    menuTrigger.type = 'button';
+                    menuTrigger.textContent = '⋯';
+                    menuTrigger.setAttribute('aria-haspopup', 'menu');
+                    menuTrigger.setAttribute('aria-expanded', 'false');
+                    menuTrigger.setAttribute('aria-label', 'Actions');
+                    const menuId = `history-menu-${report.run_id || report.id || index}`;
+                    menuTrigger.setAttribute('aria-controls', menuId);
+
+                    const menu = document.createElement('div');
+                    menu.className = 'history-menu';
+                    menu.id = menuId;
+                    menu.setAttribute('role', 'menu');
+                    menu.setAttribute('aria-label', 'Actions');
+                    menu.hidden = true;
+                    menu.addEventListener('keydown', (event) => this.trapHistoryMenuFocus(event));
 
                     if (this.showTrash) {
                         const restoreBtn = document.createElement('button');
-                        restoreBtn.className = 'btn-mini';
+                        restoreBtn.className = 'history-menu-item';
                         restoreBtn.type = 'button';
                         restoreBtn.textContent = 'Restaurer';
-                        restoreBtn.addEventListener('click', () => {
+                        restoreBtn.setAttribute('role', 'menuitem');
+                        restoreBtn.tabIndex = -1;
+                        restoreBtn.addEventListener('click', async () => {
+                            this.closeHistoryMenu();
                             const id = report.run_id || report.id;
                             if (!id) return;
-                            if (!confirm('Restaurer ce run depuis la corbeille ?')) return;
+                            const ok = await uiConfirm({
+                                title: 'Restaurer le run',
+                                message: 'Restaurer ce run depuis la corbeille ?',
+                                confirmText: 'Restaurer'
+                            });
+                            if (!ok) return;
                             this.restoreRun(id, report.user_folder);
                         });
-                        actions.appendChild(restoreBtn);
+                        menu.appendChild(restoreBtn);
 
                         const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'btn-mini btn-danger';
+                        deleteBtn.className = 'history-menu-item danger';
                         deleteBtn.type = 'button';
-                        deleteBtn.textContent = 'Supprimer';
-                        deleteBtn.addEventListener('click', () => {
+                        deleteBtn.textContent = 'Supprimer définitivement';
+                        deleteBtn.setAttribute('role', 'menuitem');
+                        deleteBtn.tabIndex = -1;
+                        deleteBtn.addEventListener('click', async () => {
+                            this.closeHistoryMenu();
                             const id = report.run_id || report.id;
                             if (!id) return;
-                            if (!confirm('Supprimer définitivement ce run ?')) return;
-                            if (!confirm('Cette action est irréversible. Confirmer ?')) return;
+                            const ok = await uiConfirm({
+                                title: 'Suppression définitive',
+                                message: 'Cette action est irréversible. Confirmer la suppression ?',
+                                confirmText: 'Supprimer',
+                                danger: true
+                            });
+                            if (!ok) return;
                             this.deleteRunPermanently(id, report.user_folder);
                         });
-                        actions.appendChild(deleteBtn);
+                        menu.appendChild(deleteBtn);
                     } else {
+                        const canRerun = report.status === 'ready';
+                        const rerunBtn = document.createElement('button');
+                        rerunBtn.className = 'history-menu-item';
+                        rerunBtn.type = 'button';
+                        rerunBtn.textContent = 'Relancer';
+                        rerunBtn.setAttribute('role', 'menuitem');
+                        rerunBtn.tabIndex = -1;
+                        if (!canRerun) {
+                            rerunBtn.setAttribute('aria-disabled', 'true');
+                            rerunBtn.disabled = true;
+                        }
+                        rerunBtn.addEventListener('click', async () => {
+                            this.closeHistoryMenu();
+                            if (!canRerun) return;
+                            const ok = await uiConfirm({
+                                title: 'Relancer le rapport',
+                                message: 'Relancer la génération du rapport ?',
+                                confirmText: 'Relancer'
+                            });
+                            if (!ok) return;
+                            this.rerunReport(report);
+                        });
+                        menu.appendChild(rerunBtn);
+
                         const renameBtn = document.createElement('button');
-                        renameBtn.className = 'btn-mini';
+                        renameBtn.className = 'history-menu-item';
                         renameBtn.type = 'button';
                         renameBtn.textContent = 'Renommer';
-                        renameBtn.addEventListener('click', () => this.renameRun(report));
-                        actions.appendChild(renameBtn);
+                        renameBtn.setAttribute('role', 'menuitem');
+                        renameBtn.tabIndex = -1;
+                        renameBtn.addEventListener('click', () => {
+                            this.closeHistoryMenu();
+                            this.renameRun(report);
+                        });
+                        menu.appendChild(renameBtn);
 
                         const trashBtn = document.createElement('button');
-                        trashBtn.className = 'btn-mini btn-danger';
+                        trashBtn.className = 'history-menu-item danger';
                         trashBtn.type = 'button';
                         trashBtn.textContent = 'Corbeille';
-                        trashBtn.addEventListener('click', () => {
+                        trashBtn.setAttribute('role', 'menuitem');
+                        trashBtn.tabIndex = -1;
+                        trashBtn.addEventListener('click', async () => {
+                            this.closeHistoryMenu();
                             const id = report.run_id || report.id;
                             if (!id) return;
-                            if (!confirm('Déplacer ce run vers la corbeille ?')) return;
+                            const ok = await uiConfirm({
+                                title: 'Déplacer vers la corbeille',
+                                message: 'Déplacer ce run vers la corbeille ?',
+                                confirmText: 'Déplacer',
+                                danger: true
+                            });
+                            if (!ok) return;
                             this.trashRun(id, report.user_folder);
                         });
-                        actions.appendChild(trashBtn);
+                        menu.appendChild(trashBtn);
                     }
+
+                    menuWrap.appendChild(menuTrigger);
+                    menuWrap.appendChild(menu);
+                    actions.appendChild(menuWrap);
+
+                    menuTrigger.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        if (menu === this.activeHistoryMenu) {
+                            this.closeHistoryMenu();
+                            return;
+                        }
+                        this.openHistoryMenu(menu, menuTrigger);
+                    });
 
                     const header = document.createElement('div');
                     header.className = 'history-header';
@@ -1636,6 +2101,7 @@
 
                     const details = document.createElement('div');
                     details.className = 'history-details hidden';
+                    details.id = detailsId;
                     const list = document.createElement('div');
                     list.className = 'artifact-list';
 
@@ -1707,6 +2173,7 @@
                     filesBtn.addEventListener('click', () => {
                         const hidden = details.classList.toggle('hidden');
                         filesBtn.textContent = hidden ? 'Fichiers' : 'Masquer';
+                        filesBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
                     });
 
                     this.reportList.appendChild(item);
@@ -1735,7 +2202,7 @@
                 if (nextName === null) return;
                 const caseName = nextName.trim();
                 if (caseName.length > 160) {
-                    alert('Nom du dossier trop long (max 160 caractères).');
+                    uiToast({ message: 'Nom du dossier trop long (max 160 caractères).', type: 'error' });
                     return;
                 }
                 const csrf = readCsrfCookie();
@@ -1751,12 +2218,13 @@
                     if (!res.ok) {
                         const errorPayload = await res.json().catch(() => ({}));
                         const message = errorPayload.error || `Renommage impossible (${res.status})`;
-                        alert(message);
+                        uiToast({ message, type: 'error' });
                         return;
                     }
                     await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Nom du dossier mis à jour.', type: 'success' });
                 } catch (err) {
-                    alert('Impossible de renommer ce run.');
+                    uiToast({ message: 'Impossible de renommer ce run.', type: 'error' });
                 }
             }
 
@@ -2162,12 +2630,12 @@
                 if (!validation.ok) return;
 
                 try {
+                    this.setFooterUploading(true);
                     this.updateStatus('Transcription et anonymisation en cours...', 'processing');
                     this.showLoader(true);
                     this.uploadProgress.classList.add('show');
                     this.progressBar.style.width = '0%';
-                    this.btnUpload.disabled = true;
-                this.uploadHint.textContent = 'Envoi en cours...';
+                    this.uploadHint.textContent = 'Envoi en cours...';
 
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -2218,16 +2686,15 @@
                     this.progressBar.style.width = '100%';
                     this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
                     this.updateStatus('Envoyé pour transcription', 'complete');
-                    this.btnUpload.disabled = false;
                 } catch (error) {
                     console.error("Erreur lors de l'upload:", error);
                     const msg = `Erreur lors de l'envoi: ${error.message}`;
                     this.updateStatus(msg, 'error');
-                    this.btnUpload.disabled = false;
                     this.uploadProgress.classList.add('show');
                     this.showUploadErrorActions("Erreur lors de l'envoi. Réessayez ou téléchargez le fichier.");
                 } finally {
                     this.showLoader(false);
+                    this.setFooterUploading(false);
                 }
             }
 
@@ -2417,12 +2884,25 @@
                 this.mainIconUse.setAttribute('xlink:href', ref);
             }
 
+            // UX: FOOTER LOADING STATE
+            setFooterUploading(isUploading) {
+                this.isUploading = Boolean(isUploading);
+                if (this.btnUpload) {
+                    this.btnUpload.classList.toggle('is-loading', this.isUploading);
+                    this.btnUpload.setAttribute('aria-busy', this.isUploading ? 'true' : 'false');
+                    const label = this.btnUpload.querySelector('span');
+                    if (label) label.textContent = this.isUploading ? 'Envoi…' : 'Envoyer';
+                }
+                this.updateUI();
+            }
+
             updateUI() {
-                this.btnStop.disabled = !(this.state === 'recording' || this.state === 'paused');
+                const isFooterLocked = this.isUploading;
+                this.btnStop.disabled = isFooterLocked || !(this.state === 'recording' || this.state === 'paused');
                 const hasAudio = Boolean(this.audioBlob);
                 this.btnTrash.disabled = !hasAudio;
-                this.btnPlay.disabled = !hasAudio;
-                this.btnUpload.disabled = !hasAudio;
+                this.btnPlay.disabled = isFooterLocked || !hasAudio;
+                this.btnUpload.disabled = isFooterLocked || !hasAudio;
                 this.btnDownload.disabled = !hasAudio;
 
                 if (this.state === 'recording') {
@@ -2436,7 +2916,7 @@
                     this.btnMain.querySelector('span').textContent = 'Enregistrer';
                 }
 
-                this.btnMain.disabled = this.state === 'processing';
+                this.btnMain.disabled = this.state === 'processing' || isFooterLocked;
             }
 
             showUploadErrorActions(message) {
@@ -2447,6 +2927,103 @@
                 const dl = document.getElementById('downloadLocal');
                 if (dl) dl.onclick = () => this.downloadAudio();
             }
+        }
+
+        // UX: CONFIRM MODAL + TOASTS
+        function uiConfirm(options = {}) {
+            const {
+                title = 'Confirmation',
+                message = '',
+                confirmText = 'Confirmer',
+                danger = false
+            } = options;
+            const backdrop = document.getElementById('uiModalBackdrop');
+            const titleEl = document.getElementById('uiModalTitle');
+            const messageEl = document.getElementById('uiModalMessage');
+            const cancelBtn = document.getElementById('uiModalCancel');
+            const confirmBtn = document.getElementById('uiModalConfirm');
+            if (!backdrop || !titleEl || !messageEl || !cancelBtn || !confirmBtn) {
+                return Promise.resolve(false);
+            }
+            return new Promise((resolve) => {
+                const lastActive = document.activeElement;
+                let resolved = false;
+
+                const cleanup = () => {
+                    document.removeEventListener('keydown', onKeydown);
+                    backdrop.removeEventListener('click', onBackdropClick);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                };
+
+                const close = (result) => {
+                    if (resolved) return;
+                    resolved = true;
+                    cleanup();
+                    backdrop.hidden = true;
+                    if (lastActive && typeof lastActive.focus === 'function') {
+                        lastActive.focus();
+                    }
+                    resolve(result);
+                };
+
+                const trapFocus = (event) => {
+                    if (event.key !== 'Tab') return;
+                    const focusable = [cancelBtn, confirmBtn];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                };
+
+                const onKeydown = (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        close(false);
+                        return;
+                    }
+                    trapFocus(event);
+                };
+
+                const onBackdropClick = (event) => {
+                    if (event.target === backdrop) close(false);
+                };
+
+                const onCancel = () => close(false);
+                const onConfirm = () => close(true);
+
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                confirmBtn.textContent = confirmText;
+                confirmBtn.classList.toggle('danger', Boolean(danger));
+                confirmBtn.classList.toggle('primary', !danger);
+
+                backdrop.hidden = false;
+                confirmBtn.focus();
+
+                document.addEventListener('keydown', onKeydown);
+                backdrop.addEventListener('click', onBackdropClick);
+                cancelBtn.addEventListener('click', onCancel);
+                confirmBtn.addEventListener('click', onConfirm);
+            });
+        }
+
+        function uiToast({ message = '', type = 'info', duration = 3200 } = {}) {
+            if (!message) return;
+            const region = document.getElementById('toastRegion');
+            if (!region) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            region.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, duration);
         }
 
         function computeInitials(name, role) {
