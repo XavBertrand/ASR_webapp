@@ -2,7 +2,8 @@ from pathlib import Path
 
 
 def test_recording_visualizer_hook_present():
-    html = Path("webapp/index.html").read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[1]
+    html = (repo_root / "webapp" / "index.html").read_text(encoding="utf-8")
     assert 'id="visualizerContainer"' in html
     assert 'id="audioCanvas"' in html
 

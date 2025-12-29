@@ -100,6 +100,29 @@
             z-index: 30;
         }
         .user-menu[hidden] { display: none; }
+        .user-menu-divider {
+            height: 1px;
+            background: var(--stroke);
+            margin: 6px 2px;
+            opacity: 0.6;
+        }
+        .user-versions {
+            display: grid;
+            gap: 6px;
+            padding: 2px 6px 4px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .user-version-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .user-version-value {
+            font-weight: 700;
+            color: var(--text-main);
+        }
         .user-menu-item {
             width: 100%;
             display: inline-flex;
@@ -619,6 +642,21 @@
                     <div class="user-menu" id="userMenu" role="menu" hidden>
                         <a class="user-menu-item user-menu-link" id="adminMenuLink" href="/admin/users" role="menuitem">Administration</a>
                         <button class="user-menu-item user-logout" id="logoutBtn" type="button" role="menuitem">Déconnexion</button>
+                        <div class="user-menu-divider" role="separator"></div>
+                        <div class="user-versions" id="versionList">
+                            <div class="user-version-item">
+                                <span>ASR webapp</span>
+                                <span class="user-version-value" id="versionWebapp">n/a</span>
+                            </div>
+                            <div class="user-version-item">
+                                <span>ASR action avocats</span>
+                                <span class="user-version-value" id="versionAction">n/a</span>
+                            </div>
+                            <div class="user-version-item">
+                                <span>ASR jetson</span>
+                                <span class="user-version-value" id="versionJetson">n/a</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2322,6 +2360,26 @@
             }
         }
 
+        async function loadVersions() {
+            const list = document.getElementById('versionList');
+            if (!list) return;
+                const setValue = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.textContent = value || 'n/a';
+                };
+            try {
+                const res = await fetch('/api/versions', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                setValue('versionWebapp', data.webapp);
+                setValue('versionAction', data.action_avocats);
+                setValue('versionJetson', data.jetson);
+            } catch (err) {
+                console.debug('Version fetch failed', err);
+            }
+        }
+
         function setupUserMenu() {
             const toggle = document.getElementById('userMenuToggle');
             const menu = document.getElementById('userMenu');
@@ -2377,6 +2435,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             setupCurrentUser();
             setupUserMenu();
+            loadVersions();
             new RecorderApp();
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);

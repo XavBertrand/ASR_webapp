@@ -59,6 +59,9 @@ DEFAULT_REPORTS_ROOT = os.environ.get("REPORTS_ROOT") or os.environ.get("RECORDI
 DEFAULT_REPORTS_QUEUE_DIR = os.environ.get("REPORTS_QUEUE_DIR") or os.environ.get("ASR_QUEUE_DIR")
 if not DEFAULT_REPORTS_QUEUE_DIR:
     DEFAULT_REPORTS_QUEUE_DIR = str(Path(DEFAULT_REPORTS_ROOT) / "queue")
+DEFAULT_WEBAPP_PYPROJECT = ROOT_DIR / "pyproject.toml"
+DEFAULT_ACTION_PYPROJECT = ROOT_DIR / "pyproject_action_avocats.toml"
+DEFAULT_JETSON_VERSION_FILE = Path(DEFAULT_UPLOAD_FOLDER) / ".asr_versions" / "asr_jetson.txt"
 ALLOWED_EXTENSIONS = {"webm", "wav", "mp3", "ogg", "m4a", "mp4"}
 DEFAULT_MAX_MB = int(os.environ.get("MAX_CONTENT_LENGTH_MB", "100"))
 DEFAULT_DB_URI = os.environ.get("DATABASE_URL", f"sqlite:///{ROOT_DIR / 'app.db'}")
@@ -88,6 +91,47 @@ def _env_bool(env_name: str, default: bool = False) -> bool:
     if raw is None or raw == "":
         return default
     return str(raw).lower() not in {"0", "false", "no", "off"}
+
+
+def _read_pyproject_version(path: Path) -> str | None:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    in_project = False
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            in_project = line == "[project]"
+            continue
+        if in_project:
+            match = re.match(r'version\s*=\s*["\']([^"\']+)["\']', line)
+            if match:
+                return match.group(1).strip()
+    return None
+
+
+def _read_version_file(path: Path) -> str | None:
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _resolve_version(default_path: Path | None, env_version: str, env_path: str) -> str | None:
+    if env_version:
+        return env_version
+    path = Path(env_path) if env_path else default_path
+    if not path:
+        return None
+    if not path.is_absolute():
+        path = (ROOT_DIR / path).resolve()
+    if not path.exists():
+        return None
+    return _read_pyproject_version(path)
 
 
 ENV_UPLOAD_UID = _parse_env_int("UPLOAD_UID")
@@ -1414,6 +1458,42 @@ def register_routes(app: Flask) -> None:
                 "role": user.role,
                 "is_active": user.is_active,
                 "twofa_enabled": user.twofa_enabled,
+            }
+        )
+
+    @app.get("/api/versions")
+    @login_required
+    def versions():
+        webapp_env_version = os.environ.get("APP_VERSION", "").strip()
+        if not webapp_env_version or webapp_env_version.lower() == "dev":
+            webapp_env_version = os.environ.get("ASR_WEBAPP_VERSION", "").strip()
+        jetson_file_override = os.environ.get("ASR_JETSON_VERSION_FILE", "").strip()
+        if jetson_file_override:
+            jetson_version_file = Path(jetson_file_override)
+            if not jetson_version_file.is_absolute():
+                jetson_version_file = (ROOT_DIR / jetson_version_file).resolve()
+        else:
+            jetson_version_file = DEFAULT_JETSON_VERSION_FILE
+        return jsonify(
+            {
+                "webapp": webapp_env_version
+                or _resolve_version(
+                    DEFAULT_WEBAPP_PYPROJECT,
+                    "",
+                    os.environ.get("ASR_WEBAPP_PYPROJECT", "").strip(),
+                ),
+                "action_avocats": _resolve_version(
+                    DEFAULT_ACTION_PYPROJECT,
+                    os.environ.get("ASR_ACTION_VERSION", "").strip(),
+                    os.environ.get("ASR_ACTION_PYPROJECT", "").strip(),
+                ),
+                "jetson": os.environ.get("ASR_JETSON_VERSION", "").strip()
+                or _read_version_file(jetson_version_file)
+                or _resolve_version(
+                    None,
+                    "",
+                    os.environ.get("ASR_JETSON_PYPROJECT", "").strip(),
+                ),
             }
         )
 
