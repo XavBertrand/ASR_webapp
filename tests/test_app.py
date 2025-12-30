@@ -410,6 +410,7 @@ def test_security_headers_present(client):
     resp = client.get("/login")
     csp = resp.headers.get("Content-Security-Policy")
     assert csp and "default-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert "media-src 'self' blob:" in csp
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
