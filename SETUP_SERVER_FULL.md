@@ -55,7 +55,7 @@ End-to-end guide to publish the webapp over HTTPS with Caddy and DuckDNS. Applic
      ai-actionavocats.duckdns.org {
          encode zstd gzip
          header {
-             Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+            Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'"
              X-Content-Type-Options "nosniff"
              X-Frame-Options "DENY"
              Referrer-Policy "no-referrer"
