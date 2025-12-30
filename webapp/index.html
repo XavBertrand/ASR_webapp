@@ -245,7 +245,7 @@
         .dot.complete { background: var(--success); box-shadow: 0 0 0 6px rgba(22,163,74,0.12); }
         .dot.error { background: var(--error); box-shadow: 0 0 0 6px rgba(229,57,53,0.12); }
         .status-label { font-weight: 700; }
-        .status-hint { color: var(--text-sub); margin-top: 2px; font-size: 0.95rem; }
+        .status-hint { color: var(--text-sub); margin-top: 2px; font-size: 0.95rem; display: none; }
 
         .timer { text-align: center; font-size: 3.1rem; font-weight: 700; letter-spacing: 1px; }
 
@@ -280,7 +280,7 @@
         .history-filter:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
         .muted { color: var(--text-sub); font-size: 0.95rem; margin-top: 10px; }
 
-        .audio-preview audio { width: 100%; margin-top: 10px; display: none; }
+        .audio-preview audio { width: 100%; margin-top: 6px; display: none; }
         .audio-preview audio.show { display: block; }
 
         .progress-track { width: 100%; height: 10px; background: #1f2a3a; border-radius: 8px; overflow: hidden; margin: 10px 0; }
@@ -299,14 +299,13 @@
 
         /* ACTIONS: FORCE 3 BUTTONS IN ONE ROW ON MOBILE */
         .actions-card {
-            background: var(--card);
-            border: 1px dashed var(--stroke);
-            border-radius: 12px;
-            padding: 12px;
             display: grid;
             gap: 8px;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+            padding: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
         }
         .bottom-spacer { height: calc(var(--controls-h, 0px) + var(--safe-inset-bottom, 0px) + 32px); } /* UX: SAFE AREA BOTTOM SPACER */
 
@@ -330,10 +329,10 @@
             margin: 0 auto;
             width: 100%;
         }
-        /* GRID 4 BUTTONS */
+        /* GRID 3 BUTTONS */
         .controls-row {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px;
         }
         .btn {
@@ -425,6 +424,11 @@
             color: var(--text-sub);
             text-transform: uppercase;
             letter-spacing: 0.3px;
+        }
+        .field-tag.is-required {
+            border-color: rgba(248,113,113,0.5);
+            background: rgba(239,68,68,0.12);
+            color: #fecaca;
         }
         .field small { color: var(--text-sub); font-size: 0.85rem; }
         .field input,
@@ -767,8 +771,7 @@
         .status-card,
         .visualizer,
         .panel,
-        .form-section,
-        .actions-card {
+        .form-section {
             border-radius: var(--radius-lg);
             padding: var(--space-4);
             box-shadow: var(--shadow-md);
@@ -831,7 +834,25 @@
         }
         .btn { min-height: 44px; border-radius: var(--radius-md); padding: var(--space-3); }
         .controls .btn { min-height: 80px; }
-        .actions-card .btn { min-height: 72px; }
+        .actions-card .btn {
+            min-height: 44px;
+            padding: 8px 6px;
+            background: transparent;
+            border: 1px dashed rgba(148,163,184,0.3);
+            box-shadow: none;
+            color: var(--text-sub);
+        }
+        .actions-card .btn span { font-size: 0.7rem; letter-spacing: 0.3px; }
+        .actions-card .btn:hover {
+            border-color: rgba(96,165,250,0.4);
+            color: var(--text-main);
+        }
+        .actions-card .btn-danger {
+            border-color: rgba(248,113,113,0.5);
+            color: #fecaca;
+            background: transparent;
+        }
+        .actions-card .btn-danger:hover { border-color: rgba(248,113,113,0.8); }
         .btn span { font-size: var(--fs-xs); letter-spacing: 0.4px; }
         .btn:active,
         .btn-mini:active,
@@ -1025,6 +1046,34 @@
         .text-muted { color: var(--text-muted); }
         /* END VISUAL POLISH v1 */
 
+        /* RECORD COMPACT */
+        .record-compact .content { gap: 12px; }
+        .record-compact .status-card { padding: 10px 12px; }
+        .record-compact .status-label { font-size: 1.05rem; }
+        .record-compact .timer { font-size: 2.4rem; letter-spacing: 1px; }
+        .record-compact .visualizer { padding: 6px 10px; height: 56px; }
+        .record-compact .visualizer canvas { height: 40px; }
+        .record-compact .preview-card { min-height: 0; padding: 10px 12px; }
+        .record-compact .preview-card .panel-head { font-size: var(--fs-sm); }
+        .record-compact .preview-card .pill { font-size: 0.7rem; padding: 3px 8px; }
+        .record-compact .preview-card .muted { margin-top: 6px; }
+
+        .upload-inline {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            border: 1px dashed rgba(148,163,184,0.25);
+            background: rgba(15,22,36,0.45);
+        }
+        .upload-inline:not(.is-uploading) .progress-track { display: none; }
+        .upload-inline .progress-track { height: 6px; margin: 0; }
+        .upload-inline .progress-bar { border-radius: 999px; }
+        .upload-inline .muted { margin-top: 0; }
+        .upload-inline .upload-actions { margin-top: 0; gap: 6px; }
+        .upload-inline .link-btn { min-height: 36px; padding: 6px 10px; font-size: 0.75rem; }
+
         @media (max-width: 640px) {
             main.page {
                 padding-top: 14px;
@@ -1045,8 +1094,8 @@
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 8px; }
             .actions-card { gap: 8px; }
-            .actions-card .btn { padding: 10px 8px; min-height: 74px; }
-            .actions-card .btn span { font-size: 0.74rem; }
+            .actions-card .btn { padding: 8px 6px; min-height: 44px; }
+            .actions-card .btn span { font-size: 0.7rem; }
             .history-header { flex-direction: column; align-items: flex-start; }
             .history-actions {
                 width: 100%;
@@ -1184,59 +1233,56 @@
     </div>
 
     <main class="page">
-        <section class="tab-panel active" id="panelRecord" role="tabpanel" aria-labelledby="tabRecord">
+        <section class="tab-panel active record-compact" id="panelRecord" role="tabpanel" aria-labelledby="tabRecord">
             <div class="content">
                 <div class="status-card">
                     <div class="dot" id="statusDot"></div>
                     <div>
-                        <div class="status-label" id="statusLabel">Prêt - appuyez pour démarrer</div>
+                        <div class="status-label" id="statusLabel">Prêt</div>
                         <div class="status-hint" id="statusHint"></div>
                     </div>
                 </div>
 
                 <div class="timer" id="timer">00:00</div>
 
-                <div class="visualizer" id="visualizerContainer">
+                <div class="visualizer hidden" id="visualizerContainer">
                     <canvas id="audioCanvas"></canvas>
                 </div>
 
-                <div class="panel-grid">
-                    <div class="panel audio-preview" id="audioPreview">
-                        <div class="panel-head">
-                            <span>Aperçu</span>
-                            <span class="pill">Audio</span>
-                        </div>
-                        <p class="muted" id="previewEmpty">En attente d'un enregistrement.</p>
-                        <audio controls id="audioPlayer"></audio>
+                <div class="panel preview-card audio-preview" id="audioPreview">
+                    <div class="panel-head">
+                        <span>Aperçu</span>
+                        <span class="pill">Audio</span>
                     </div>
-
-                    <div class="panel upload-progress" id="uploadProgress">
-                        <div class="panel-head">Envoi vers le serveur</div>
-                        <div class="progress-track">
-                            <div class="progress-bar" id="progressBar"></div>
-                        </div>
-                        <p class="muted" id="uploadHint">Prêt à envoyer pour transcription après un enregistrement.</p>
-                    </div>
-
-                    <div class="panel file-info" id="fileInfo">
-                        <div class="panel-head">Informations fichier</div>
-                        <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
-                    </div>
+                    <p class="muted" id="previewEmpty">Aucun enregistrement.</p>
+                    <audio controls id="audioPlayer"></audio>
                 </div>
 
                 <div class="actions-card">
-                    <button class="btn btn-secondary" id="btnImport">
+                    <button class="btn btn-ghost" id="btnImport">
                         <svg class="icon" aria-hidden="true"><use href="#icon-upload_file"></use></svg>
                         <span>Importer</span>
                     </button>
-                    <button class="btn btn-secondary" id="btnDownload" disabled>
+                    <button class="btn btn-ghost" id="btnDownload" disabled>
                         <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
                         <span>Télécharger</span>
                     </button>
-                    <button class="btn btn-danger" id="btnTrash" disabled>
+                    <button class="btn btn-danger btn-ghost" id="btnTrash" disabled>
                         <svg class="icon" aria-hidden="true"><use href="#icon-delete_outline"></use></svg>
                         <span>Vider</span>
                     </button>
+                </div>
+
+                <div class="upload-inline hidden" id="uploadProgress" aria-live="polite">
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="muted hidden" id="uploadHint"></div>
+                </div>
+
+                <div class="panel file-info hidden" id="fileInfo" aria-hidden="true">
+                    <div class="panel-head">Informations fichier</div>
+                    <div class="muted" id="fileDetails">Aucun fichier pour l'instant.</div>
                 </div>
             </div>
         </section>
@@ -1247,7 +1293,6 @@
                     <div class="form-header">
                         <div>
                             <h2>Informations</h2>
-                            <small>Les métadonnées seront envoyées avec l'audio.</small>
                         </div>
                         <div class="meta-indicator" id="metaSavedIndicator">
                             <span class="dot"></span>
@@ -1256,7 +1301,7 @@
                     </div>
                     <div class="warning-inline hidden" id="metaWarning">
                         <svg class="icon" style="color:var(--warn);" aria-hidden="true"><use href="#icon-warning"></use></svg>
-                        <span id="metaWarningText">Champs requis manquants.</span>
+                        <span id="metaWarningText">Champs requis.</span>
                     </div>
                     <div class="form-block u-stack-sm">
                         <div class="form-block-title">Essentiel</div>
@@ -1264,17 +1309,23 @@
                             <div class="field" id="fieldCaseName">
                                 <label for="inputCaseName"><span>Dossier</span><span class="field-tag">Optionnel</span></label>
                                 <input type="text" id="inputCaseName" maxlength="160" placeholder="Ex: Affaire Dupont - licenciement" />
-                                <small>Titre affiché dans l'historique.</small>
+                            </div>
+                            <div class="field" id="fieldMeetingReportType">
+                                <label for="inputMeetingReportType"><span>Type de compte rendu</span><span class="field-tag is-required">Requis</span></label>
+                                <select id="inputMeetingReportType">
+                                    <option value="entretien_collaborateur">Entretien collaborateur</option>
+                                    <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
+                                    <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
+                                    <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
+                                </select>
                             </div>
                             <div class="field" id="fieldSpeakerContext">
                                 <label for="inputSpeakerContext"><span>Intervenants</span><span class="field-tag">Optionnel</span></label>
                                 <textarea id="inputSpeakerContext" placeholder="Ex: Avocat avec client, experts, etc."></textarea>
-                                <small>Rôles ou participants à l'entretien.</small>
                             </div>
                             <div class="field" id="fieldMeetingDate">
                                 <label for="inputMeetingDate">Date</label>
                                 <input type="date" id="inputMeetingDate" />
-                                <small>Par défaut : date du jour.</small>
                             </div>
                         </div>
                     </div>
@@ -1284,17 +1335,6 @@
                             <div class="field" id="fieldAsrPrompt">
                                 <label for="inputAsrPrompt"><span>Mots clés</span><span class="field-tag">Optionnel</span></label>
                                 <textarea id="inputAsrPrompt" placeholder="Tags, noms propres, vocabulaire spécifique."></textarea>
-                                <small>Mots clés pour guider la transcription.</small>
-                            </div>
-                            <div class="field" id="fieldMeetingReportType">
-                                <label for="inputMeetingReportType">Type de compte rendu</label>
-                                <select id="inputMeetingReportType">
-                                    <option value="entretien_collaborateur">Entretien collaborateur</option>
-                                    <option value="entretien_client_particulier_contentieux">Client particulier (contentieux)</option>
-                                    <option value="entretien_client_professionnel_conseil">Client professionnel (conseil)</option>
-                                    <option value="entretien_client_professionnel_contentieux">Client professionnel (contentieux)</option>
-                                </select>
-                                <small>Requis pour l'envoi.</small>
                             </div>
                         </div>
                     </details>
@@ -1350,10 +1390,6 @@
                     <svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg>
                     <span>Stop</span>
                 </button>
-                <button class="btn btn-secondary" id="btnPlay" disabled>
-                    <svg class="icon" aria-hidden="true"><use href="#icon-play_arrow"></use></svg>
-                    <span>Écouter</span>
-                </button>
                 <button class="btn btn-secondary" id="btnUpload" disabled>
                     <svg class="icon" aria-hidden="true"><use href="#icon-cloud_upload"></use></svg>
                     <span>Envoyer</span>
@@ -1366,7 +1402,7 @@
  </div> <!-- end .app -->
     <div class="loader-overlay hidden" id="loader">
         <div class="loader-spinner"></div>
-        <p style="color:var(--text-main); font-weight: 600;">Transcription et anonymisation en cours...</p>
+        <p style="color:var(--text-main); font-weight: 600;">Traitement en cours...</p>
     </div>
     <!-- UX: CONFIRM MODAL + TOAST -->
     <div class="modal-backdrop" id="uiModalBackdrop" hidden>
@@ -1426,6 +1462,7 @@
                 this.activeHistoryMenuItems = [];
                 this.menuHideTimeout = null;
                 this.isUploading = false;
+                this.uploadErrorVisible = false;
                 this.trashArmed = false;
                 this.trashArmTimeout = null;
 
@@ -1458,7 +1495,7 @@
                 }
 
                 if (!this.checkBrowserSupport()) return;
-                this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
+                this.updateStatus('Prêt', 'ready');
                 this.updateUI();
             }
 
@@ -1542,7 +1579,9 @@
                 this.btnMain.addEventListener('click', () => this.handleMainAction());
                 this.btnStop.addEventListener('click', () => this.handleStop());
                 this.btnTrash.addEventListener('click', () => this.handleTrashClick());
-                this.btnPlay.addEventListener('click', () => this.playAudio());
+                if (this.btnPlay) {
+                    this.btnPlay.addEventListener('click', () => this.playAudio());
+                }
                 this.btnUpload.addEventListener('click', () => this.uploadToJetson());
                 this.btnDownload.addEventListener('click', () => this.downloadAudio());
                 this.filePicker.addEventListener('change', (event) => {
@@ -2687,7 +2726,7 @@
                 this.fieldCaseName?.classList.toggle('field-error', meta.case_name && meta.case_name.length > 160);
 
                 if (missing.length) {
-                    this.showMetadataWarning(`Champs requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type de compte rendu').join(', ')}`);
+                    this.showMetadataWarning(`Requis: ${missing.map(m => m.field === 'date' ? 'Date' : 'Type').join(', ')}`);
                     this.setActiveTab('meta');
                     const target = missing[0].el;
                     if (this.metaAdvanced && target && this.metaAdvanced.contains(target)) {
@@ -2699,7 +2738,7 @@
                     return { ok: false };
                 }
                 if (meta.case_name && meta.case_name.length > 160) {
-                    this.showMetadataWarning('Nom du dossier trop long (max 160 caractères).');
+                    this.showMetadataWarning('Nom trop long.');
                     this.setActiveTab('meta');
                     if (this.inputCaseName) {
                         requestAnimationFrame(() => this.inputCaseName.focus({ preventScroll: true }));
@@ -2724,7 +2763,7 @@
 
             checkBrowserSupport() {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    this.updateStatus("Votre navigateur ne supporte pas l'enregistrement audio", 'error');
+                    this.updateStatus('Micro indisponible', 'error');
                     this.btnMain.disabled = true;
                     return false;
                 }
@@ -2801,14 +2840,14 @@
                     this.elapsedBeforePause = 0;
                     this.startTime = Date.now();
 
-                    this.updateStatus('Enregistrement en cours', 'recording');
+                    this.updateStatus('Enregistrement', 'recording');
                     this.startTimer();
                     this.resizeCanvas();
                     this.drawVisualizer();
                     this.updateUI();
                 } catch (error) {
                     console.error("Erreur lors du démarrage de l'enregistrement:", error);
-                    this.updateStatus("Erreur d'accès au microphone", 'error');
+                    this.updateStatus('Erreur micro', 'error');
                 }
             }
 
@@ -2832,17 +2871,16 @@
                 this.audioPlayer.src = objectUrl;
                 this.audioPlayer.classList.add('show');
                 if (this.previewEmpty) {
-                    const label = this.currentFileName || 'Fichier audio';
-                    this.previewEmpty.textContent = `Fichier chargé : ${label}`;
-                    this.previewEmpty.style.display = 'block';
+                    this.previewEmpty.textContent = 'Aucun enregistrement.';
+                    this.previewEmpty.style.display = 'none';
                 }
                 this.audioPreview.classList.add('show');
                 this.audioPlayer.load();
 
                 this.audioPlayer.onerror = () => {
                     if (!this.previewEmpty) return;
-                    const label = this.currentFileName || 'Fichier audio';
-                    this.previewEmpty.textContent = `${label} chargé. Prévisualisation indisponible pour ce format.`;
+                    this.previewEmpty.textContent = 'Lecture indisponible.';
+                    this.previewEmpty.style.display = 'block';
                 };
 
                 const setDuration = () => {
@@ -2860,7 +2898,7 @@
                 }
 
                 this.state = 'finished';
-                this.updateStatus('Fichier importé - écoutez ou envoyez', 'complete');
+                this.updateStatus('Fichier prêt', 'complete');
                 this.showFileInfo();
                 this.updateUI();
             }
@@ -2895,7 +2933,7 @@
 
                 this.stopTimer();
                 this.stopVisualizer();
-                this.updateStatus('Enregistrement en pause', 'paused');
+                this.updateStatus('Pause', 'paused');
                 this.updateUI();
             }
 
@@ -2909,7 +2947,7 @@
 
                 this.startTimer();
                 this.drawVisualizer();
-                this.updateStatus('Enregistrement en cours', 'recording');
+                this.updateStatus('Enregistrement', 'recording');
                 this.updateUI();
             }
 
@@ -2922,7 +2960,7 @@
                     this.stopTimer();
                     this.stopVisualizer();
                     this.state = 'processing';
-                    this.updateStatus('Préparation du fichier...', 'processing');
+                    this.updateStatus('Traitement', 'processing');
                     this.updateUI();
 
                     this.mediaRecorder.stop();
@@ -2935,7 +2973,9 @@
                 const audioUrl = URL.createObjectURL(this.audioBlob);
                 this.audioPlayer.src = audioUrl;
                 this.audioPlayer.classList.add('show');
-                this.previewEmpty.style.display = 'none';
+                if (this.previewEmpty) {
+                    this.previewEmpty.style.display = 'none';
+                }
 
                 this.audioPreview.classList.add('show');
 
@@ -2946,7 +2986,7 @@
 
                 this.state = 'finished';
                 this.mediaRecorder = null;
-                this.updateStatus('Fichier prêt - écoutez ou envoyez', 'complete');
+                this.updateStatus('Fichier prêt', 'complete');
                 this.updateUI();
             }
 
@@ -2978,12 +3018,16 @@
                 if (!validation.ok) return;
 
                 try {
+                    this.uploadErrorVisible = false;
                     this.setFooterUploading(true);
-                    this.updateStatus('Transcription et anonymisation en cours...', 'processing');
+                    this.updateStatus('Envoi…', 'processing');
                     this.showLoader(true);
-                    this.uploadProgress.classList.add('show');
-                    this.progressBar.style.width = '0%';
-                    this.uploadHint.textContent = 'Envoi en cours...';
+                    if (this.uploadProgress) this.uploadProgress.classList.remove('hidden');
+                    if (this.uploadHint) {
+                        this.uploadHint.textContent = '';
+                        this.uploadHint.classList.add('hidden');
+                    }
+                    if (this.progressBar) this.progressBar.style.width = '0%';
 
                     const formData = new FormData();
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -3011,7 +3055,7 @@
                         xhr.upload.onprogress = (event) => {
                             if (event.lengthComputable) {
                                 const percent = (event.loaded / event.total) * 100;
-                                this.progressBar.style.width = percent + '%';
+                                if (this.progressBar) this.progressBar.style.width = percent + '%';
                             }
                         };
 
@@ -3031,15 +3075,16 @@
                     });
 
                     await send();
-                    this.progressBar.style.width = '100%';
-                    this.uploadHint.textContent = 'Envoyé avec succès. Vous pouvez modifier les métadonnées et renvoyer.';
-                    this.updateStatus('Envoyé pour transcription', 'complete');
+                    if (this.progressBar) this.progressBar.style.width = '100%';
+                    this.updateStatus('Envoyé', 'complete');
+                    this.uploadErrorVisible = false;
+                    if (this.uploadProgress) this.uploadProgress.classList.add('hidden');
                 } catch (error) {
                     console.error("Erreur lors de l'upload:", error);
-                    const msg = `Erreur lors de l'envoi: ${error.message}`;
-                    this.updateStatus(msg, 'error');
-                    this.uploadProgress.classList.add('show');
-                    this.showUploadErrorActions("Erreur lors de l'envoi. Réessayez ou téléchargez le fichier.");
+                    this.updateStatus('Erreur', 'error');
+                    this.uploadErrorVisible = true;
+                    if (this.uploadProgress) this.uploadProgress.classList.remove('hidden');
+                    this.showUploadErrorActions();
                 } finally {
                     this.showLoader(false);
                     this.setFooterUploading(false);
@@ -3126,21 +3171,28 @@
             }
 
             resizeCanvas() {
-                this.canvas.width = this.vizContainer.offsetWidth;
-                this.canvas.height = 120;
+                if (!this.canvas || !this.vizContainer) return;
+                const width = this.vizContainer.offsetWidth
+                    || this.vizContainer.parentElement?.clientWidth
+                    || this.canvas.offsetWidth
+                    || 0;
+                const height = Math.max(40, this.vizContainer.clientHeight ? this.vizContainer.clientHeight - 12 : 40);
+                this.canvas.width = width;
+                this.canvas.height = height;
             }
 
             updateStatus(message, type) {
-                this.statusLabel.textContent = message;
-                const hints = {
-                    ready: 'Appuyez sur Enregistrer pour démarrer.',
-                    recording: 'Le micro est actif.',
-                    paused: 'Reprenez ou stoppez pour préparer le fichier.',
-                    processing: 'Traitement du fichier en cours.',
-                    complete: 'Vous pouvez écouter ou envoyer pour transcription.',
-                    error: 'Réessayez, téléchargez le fichier ou contactez le support.'
+                const labels = {
+                    ready: 'Prêt',
+                    recording: 'Enregistrement',
+                    paused: 'Pause',
+                    processing: 'Traitement',
+                    complete: 'Terminé',
+                    error: 'Erreur'
                 };
-                this.statusHint.textContent = hints[type] || '';
+                const nextLabel = message || labels[type] || '';
+                if (this.statusLabel) this.statusLabel.textContent = nextLabel;
+                if (this.statusHint) this.statusHint.textContent = '';
 
                 this.statusDot.className = 'dot';
                 if (type !== 'ready') {
@@ -3149,7 +3201,7 @@
             }
 
             showFileInfo() {
-                if (this.audioBlob) {
+                if (this.audioBlob && this.fileDetails && this.fileInfo) {
                     const sizeKB = (this.audioBlob.size / 1024).toFixed(2);
                     const duration = (this.audioDurationSec != null)
                         ? this.formatDuration(this.audioDurationSec)
@@ -3205,18 +3257,25 @@
                 this.audioPlayer.onloadedmetadata = null;
                 this.audioPlayer.src = '';
                 this.audioPlayer.classList.remove('show');
-                this.previewEmpty.textContent = "En attente d'un enregistrement.";
+                this.previewEmpty.textContent = 'Aucun enregistrement.';
                 this.previewEmpty.style.display = 'block';
 
                 this.progressBar.style.width = '0%';
-                this.uploadProgress.classList.remove('show');
-                this.uploadHint.textContent = 'Prêt à envoyer pour transcription après un enregistrement.';
+                this.uploadErrorVisible = false;
+                if (this.uploadProgress) {
+                    this.uploadProgress.classList.add('hidden');
+                    this.uploadProgress.classList.remove('is-uploading');
+                }
+                if (this.uploadHint) {
+                    this.uploadHint.textContent = '';
+                    this.uploadHint.classList.add('hidden');
+                }
 
                 this.fileDetails.textContent = "Aucun fichier pour l'instant.";
                 this.fileInfo.classList.remove('show');
 
                 if (clearStatus) {
-                    this.updateStatus('Prêt - appuyez pour démarrer', 'ready');
+                    this.updateStatus('Prêt', 'ready');
                 }
 
                 this.updateTimerDisplay(0);
@@ -3269,23 +3328,53 @@
 
             updateUI() {
                 const isFooterLocked = this.isUploading;
-                this.btnStop.disabled = isFooterLocked || !(this.state === 'recording' || this.state === 'paused');
+                if (this.btnStop) {
+                    this.btnStop.disabled = isFooterLocked || !(this.state === 'recording' || this.state === 'paused');
+                }
                 const hasAudio = Boolean(this.audioBlob);
-                this.btnTrash.disabled = !hasAudio;
-                this.btnPlay.disabled = isFooterLocked || !hasAudio;
-                this.btnUpload.disabled = isFooterLocked || !hasAudio;
-                this.btnDownload.disabled = !hasAudio;
+                if (this.btnTrash) this.btnTrash.disabled = !hasAudio;
+                if (this.btnPlay) this.btnPlay.disabled = isFooterLocked || !hasAudio;
+                if (this.btnUpload) this.btnUpload.disabled = isFooterLocked || !hasAudio;
+                if (this.btnDownload) this.btnDownload.disabled = !hasAudio;
                 if (!hasAudio) {
                     this.trashArmed = false;
                 }
                 this.updateTrashUi();
 
+                if (this.previewEmpty) {
+                    this.previewEmpty.style.display = hasAudio ? 'none' : 'block';
+                }
+                if (this.audioPlayer) {
+                    const hasSrc = Boolean(this.audioPlayer.src);
+                    this.audioPlayer.classList.toggle('show', hasAudio && hasSrc);
+                }
+
+                const showViz = this.state === 'recording' || this.state === 'paused';
+                if (this.vizContainer) {
+                    this.vizContainer.classList.toggle('hidden', !showViz);
+                    if (showViz) {
+                        this.resizeCanvas();
+                    }
+                }
+
+                if (this.uploadProgress) {
+                    const showUpload = this.isUploading || this.uploadErrorVisible;
+                    this.uploadProgress.classList.toggle('hidden', !showUpload);
+                    this.uploadProgress.classList.toggle('is-uploading', this.isUploading);
+                }
+
                 if (this.state === 'recording') {
                     this.setMainIcon('pause');
-                    this.btnMain.querySelector('span').textContent = 'Mettre en pause';
+                    this.btnMain.querySelector('span').textContent = 'Pause';
                 } else if (this.state === 'paused') {
                     this.setMainIcon('play_arrow');
                     this.btnMain.querySelector('span').textContent = 'Reprendre';
+                } else if (this.state === 'processing') {
+                    this.setMainIcon('mic');
+                    this.btnMain.querySelector('span').textContent = 'Traitement';
+                } else if (this.state === 'finished') {
+                    this.setMainIcon('mic');
+                    this.btnMain.querySelector('span').textContent = 'Nouveau';
                 } else {
                     this.setMainIcon('mic');
                     this.btnMain.querySelector('span').textContent = 'Enregistrer';
@@ -3294,9 +3383,10 @@
                 this.btnMain.disabled = this.state === 'processing' || isFooterLocked;
             }
 
-            showUploadErrorActions(message) {
+            showUploadErrorActions() {
                 if (!this.uploadHint) return;
-                this.uploadHint.innerHTML = `${message}<div class=\"upload-actions\"><button class=\"link-btn btn-ghost\" id=\"retryUpload\">Réessayer</button><button class=\"link-btn btn-ghost\" id=\"downloadLocal\">Télécharger localement</button><span class=\"muted\">Contactez le support si le problème persiste.</span></div>`;
+                this.uploadHint.innerHTML = '<div class="upload-actions"><button class="link-btn btn-ghost" id="retryUpload">Réessayer</button><button class="link-btn btn-ghost" id="downloadLocal">Télécharger</button></div>';
+                this.uploadHint.classList.remove('hidden');
                 const retry = document.getElementById('retryUpload');
                 if (retry) retry.onclick = () => this.uploadToJetson();
                 const dl = document.getElementById('downloadLocal');
