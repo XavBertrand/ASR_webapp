@@ -1426,6 +1426,8 @@
                 this.activeHistoryMenuItems = [];
                 this.menuHideTimeout = null;
                 this.isUploading = false;
+                this.trashArmed = false;
+                this.trashArmTimeout = null;
 
                 this.initElements();
                 this.reportSortMode = this.historySortSelect?.value || this.reportSortMode;
@@ -1539,7 +1541,7 @@
                 this.btnImport.addEventListener('click', () => this.filePicker?.click());
                 this.btnMain.addEventListener('click', () => this.handleMainAction());
                 this.btnStop.addEventListener('click', () => this.handleStop());
-                this.btnTrash.addEventListener('click', () => this.resetInterface());
+                this.btnTrash.addEventListener('click', () => this.handleTrashClick());
                 this.btnPlay.addEventListener('click', () => this.playAudio());
                 this.btnUpload.addEventListener('click', () => this.uploadToJetson());
                 this.btnDownload.addEventListener('click', () => this.downloadAudio());
@@ -2745,6 +2747,26 @@
                 }
             }
 
+            handleTrashClick() {
+                if (!this.audioBlob) return;
+                if (!this.trashArmed) {
+                    this.trashArmed = true;
+                    this.updateTrashUi();
+                    uiToast({
+                        message: "Cliquez à nouveau sur Vider pour supprimer l'enregistrement.",
+                        type: 'error',
+                        duration: 4200
+                    });
+                    if (this.trashArmTimeout) {
+                        clearTimeout(this.trashArmTimeout);
+                    }
+                    this.trashArmTimeout = setTimeout(() => this.disarmTrash(), 4200);
+                    return;
+                }
+                this.disarmTrash();
+                this.resetInterface();
+            }
+
             async startRecording() {
                 try {
                     this.resetInterface(false);
@@ -3164,6 +3186,7 @@
                 if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
                     this.mediaRecorder.stop();
                 }
+                this.disarmTrash();
                 this.mediaRecorder = null;
                 this.stopTimer();
                 this.stopVisualizer();
@@ -3203,6 +3226,28 @@
                 }
             }
 
+            disarmTrash() {
+                this.trashArmed = false;
+                if (this.trashArmTimeout) {
+                    clearTimeout(this.trashArmTimeout);
+                    this.trashArmTimeout = null;
+                }
+                this.updateTrashUi();
+            }
+
+            updateTrashUi() {
+                if (!this.btnTrash) return;
+                const label = this.btnTrash.querySelector('span');
+                if (!label) return;
+                if (this.trashArmed) {
+                    label.textContent = 'Confirmer';
+                    this.btnTrash.setAttribute('aria-pressed', 'true');
+                } else {
+                    label.textContent = 'Vider';
+                    this.btnTrash.setAttribute('aria-pressed', 'false');
+                }
+            }
+
             setMainIcon(iconName) {
                 if (!this.mainIconUse) return;
                 const ref = `#icon-${iconName}`;
@@ -3230,6 +3275,10 @@
                 this.btnPlay.disabled = isFooterLocked || !hasAudio;
                 this.btnUpload.disabled = isFooterLocked || !hasAudio;
                 this.btnDownload.disabled = !hasAudio;
+                if (!hasAudio) {
+                    this.trashArmed = false;
+                }
+                this.updateTrashUi();
 
                 if (this.state === 'recording') {
                     this.setMainIcon('pause');
