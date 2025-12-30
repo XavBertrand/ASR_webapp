@@ -124,6 +124,28 @@ def test_login_success_and_fail_and_rate_limit(client, app):
         assert AuditLog.query.filter_by(action="login_failed").count() >= 4
 
 
+def test_templates_include_visual_shell(client):
+    login_resp = client.get("/login")
+    login_html = login_resp.get_data(as_text=True)
+    assert "app_shell.css" in login_html
+    assert 'class="page-shell"' in login_html
+    assert re.search(r'class="card[^"]*page-card', login_html)
+
+    ok = login(client, "admin", "SuperSecureAdmin!")
+    assert ok.status_code in (302, 200)
+
+    admin_users_resp = client.get("/admin/users")
+    admin_users_html = admin_users_resp.get_data(as_text=True)
+    assert "app_shell.css" in admin_users_html
+    assert 'class="page-admin"' in admin_users_html
+    assert 'class="topbar"' in admin_users_html
+
+    admin_2fa_resp = client.get("/admin/2fa/setup")
+    admin_2fa_html = admin_2fa_resp.get_data(as_text=True)
+    assert "app_shell.css" in admin_2fa_html
+    assert 'class="modal-backdrop"' in admin_2fa_html
+
+
 def test_csrf_blocks_admin_post(client):
     login(client, "admin", "SuperSecureAdmin!")
     resp = client.post("/api/admin/users", json={"username": "bob", "password": "Password123", "role": "user"})
