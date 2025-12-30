@@ -80,7 +80,7 @@ log "Using Caddy domain ${CADDY_DOMAIN}"
     printf '%s {\n' "${CADDY_DOMAIN}"
     printf '    encode zstd gzip\n\n'
     printf '    header {\n'
-    printf '        Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\''; style-src '\''self'\'' '\''unsafe-inline'\'' https://fonts.googleapis.com; font-src '\''self'\'' https://fonts.gstatic.com data:; img-src '\''self'\'' data:; frame-ancestors '\''none'\''"\n'
+    printf '        Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''unsafe-inline'\''; style-src '\''self'\'' '\''unsafe-inline'\'' https://fonts.googleapis.com; font-src '\''self'\'' https://fonts.gstatic.com data:; img-src '\''self'\'' data:; media-src '\''self'\'' blob:; frame-ancestors '\''none'\''"\n'
     printf '        X-Content-Type-Options "nosniff"\n'
     printf '        X-Frame-Options "DENY"\n'
     printf '        Referrer-Policy "strict-origin-when-cross-origin"\n'
