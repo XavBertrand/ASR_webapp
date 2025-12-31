@@ -297,16 +297,34 @@
         }
         .link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-        /* ACTIONS: FORCE 3 BUTTONS IN ONE ROW ON MOBILE */
-        .actions-card {
+        /* SECONDARY CONTROLS ROW */
+        .controls-secondary {
             display: grid;
             gap: 8px;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            padding: 0;
-            background: transparent;
-            border: none;
-            box-shadow: none;
+            margin-bottom: 14px;
         }
+        .btn.btn-tool {
+            min-height: 54px;
+            padding: 8px 6px;
+            gap: 4px;
+            background: rgba(30, 38, 52, 0.7);
+            border: 1px dashed rgba(148,163,184,0.35);
+            box-shadow: none;
+            color: var(--text-sub);
+        }
+        .btn.btn-tool .icon { width: 20px; height: 20px; }
+        .btn.btn-tool span { font-size: 0.7rem; letter-spacing: 0.25px; }
+        .btn.btn-tool:hover {
+            border-color: rgba(96,165,250,0.45);
+            color: var(--text-main);
+        }
+        .btn.btn-tool.btn-danger {
+            background: rgba(239,68,68,0.08);
+            border: 1px solid rgba(248,113,113,0.45);
+            color: #fecaca;
+        }
+        .btn.btn-tool.btn-danger:hover { border-color: rgba(248,113,113,0.8); }
         .bottom-spacer { height: calc(var(--controls-h, 0px) + var(--safe-inset-bottom, 0px) + 32px); } /* UX: SAFE AREA BOTTOM SPACER */
 
         /* FIXED FOOTER BAR (grid row keeps it always visible) */
@@ -328,6 +346,9 @@
             max-width: 960px;
             margin: 0 auto;
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
         }
         /* GRID 3 BUTTONS */
         .controls-row {
@@ -834,25 +855,25 @@
         }
         .btn { min-height: 44px; border-radius: var(--radius-md); padding: var(--space-3); }
         .controls .btn { min-height: 80px; }
-        .actions-card .btn {
-            min-height: 44px;
+        .controls-secondary .btn-tool {
+            min-height: 54px;
             padding: 8px 6px;
-            background: transparent;
+            background: rgba(30, 38, 52, 0.7);
             border: 1px dashed rgba(148,163,184,0.3);
             box-shadow: none;
             color: var(--text-sub);
         }
-        .actions-card .btn span { font-size: 0.7rem; letter-spacing: 0.3px; }
-        .actions-card .btn:hover {
+        .controls-secondary .btn-tool span { font-size: 0.7rem; letter-spacing: 0.3px; }
+        .controls-secondary .btn-tool:hover {
             border-color: rgba(96,165,250,0.4);
             color: var(--text-main);
         }
-        .actions-card .btn-danger {
+        .controls-secondary .btn-tool.btn-danger {
             border-color: rgba(248,113,113,0.5);
             color: #fecaca;
-            background: transparent;
+            background: rgba(239,68,68,0.08);
         }
-        .actions-card .btn-danger:hover { border-color: rgba(248,113,113,0.8); }
+        .controls-secondary .btn-tool.btn-danger:hover { border-color: rgba(248,113,113,0.8); }
         .btn span { font-size: var(--fs-xs); letter-spacing: 0.4px; }
         .btn:active,
         .btn-mini:active,
@@ -1093,9 +1114,9 @@
             .form-grid { grid-template-columns: minmax(0, 1fr); }
             .timer { font-size: 2.6rem; }
             .controls-row { gap: 8px; }
-            .actions-card { gap: 8px; }
-            .actions-card .btn { padding: 8px 6px; min-height: 44px; }
-            .actions-card .btn span { font-size: 0.7rem; }
+            .controls-secondary { gap: 8px; }
+            .controls-secondary .btn-tool { padding: 8px 6px; min-height: 52px; }
+            .controls-secondary .btn-tool span { font-size: 0.7rem; }
             .history-header { flex-direction: column; align-items: flex-start; }
             .history-actions {
                 width: 100%;
@@ -1258,21 +1279,6 @@
                     <audio controls id="audioPlayer"></audio>
                 </div>
 
-                <div class="actions-card">
-                    <button class="btn btn-ghost" id="btnImport">
-                        <svg class="icon" aria-hidden="true"><use href="#icon-upload_file"></use></svg>
-                        <span>Importer</span>
-                    </button>
-                    <button class="btn btn-ghost" id="btnDownload" disabled>
-                        <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
-                        <span>Télécharger</span>
-                    </button>
-                    <button class="btn btn-danger btn-ghost" id="btnTrash" disabled>
-                        <svg class="icon" aria-hidden="true"><use href="#icon-delete_outline"></use></svg>
-                        <span>Vider</span>
-                    </button>
-                </div>
-
                 <div class="upload-inline hidden" id="uploadProgress" aria-live="polite">
                     <div class="progress-track">
                         <div class="progress-bar" id="progressBar"></div>
@@ -1381,6 +1387,20 @@
 
     <div class="controls" aria-label="Commandes principales"> <!-- FIXED FOOTER BAR -->
         <div class="controls-inner">
+            <div class="controls-secondary">
+                <button class="btn btn-tool" id="btnImport">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-upload_file"></use></svg>
+                    <span>Importer</span>
+                </button>
+                <button class="btn btn-tool" id="btnDownload" disabled>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+                    <span>Télécharger</span>
+                </button>
+                <button class="btn btn-tool btn-danger" id="btnTrash" disabled>
+                    <svg class="icon" aria-hidden="true"><use href="#icon-delete_outline"></use></svg>
+                    <span>Vider</span>
+                </button>
+            </div>
             <div class="controls-row">
                 <button class="btn btn-main btn-primary" id="btnMain">
                     <svg class="icon" id="mainIcon" aria-hidden="true"><use href="#icon-mic"></use></svg>
@@ -1427,6 +1447,7 @@
                 this.audioCtx = null;
                 this.analyser = null;
                 this.dataArray = null;
+                this.smoothedBars = null;
                 this.animationId = null;
                 this.isPaused = false;
                 this.startTime = null;
@@ -2918,8 +2939,10 @@
                 this.analyser = this.audioCtx.createAnalyser();
                 const microphone = this.audioCtx.createMediaStreamSource(this.stream);
                 microphone.connect(this.analyser);
-                this.analyser.fftSize = 256;
+                this.analyser.fftSize = 512;
+                this.analyser.smoothingTimeConstant = 0.8;
                 this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.smoothedBars = null;
             }
 
             pauseRecording() {
@@ -3132,32 +3155,48 @@
                     }
                     const width = this.canvas.width;
                     const height = this.canvas.height;
-                    const centerY = height / 2;
-
                     this.analyser.getByteFrequencyData(this.dataArray);
-                    let sum = 0;
-                    for (let i = 0; i < this.dataArray.length; i++) {
-                        sum += this.dataArray[i];
+                    const barCount = Math.min(
+                        this.dataArray.length,
+                        64,
+                        Math.max(16, Math.floor(width / 8))
+                    );
+                    if (!this.smoothedBars || this.smoothedBars.length !== barCount) {
+                        this.smoothedBars = new Float32Array(barCount);
                     }
-                    const average = sum / this.dataArray.length;
-                    const volume = (average / 255) * 100;
-                    const amplitude = Math.max(2, volume * 1.4);
-                    const time = Date.now() * 0.005;
+                    const binsPerBar = Math.max(1, Math.floor(this.dataArray.length / barCount));
+                    const barGap = 3;
+                    const totalGap = barGap * (barCount - 1);
+                    const barWidth = Math.max(2, (width - totalGap) / barCount);
 
                     this.canvasCtx.clearRect(0, 0, width, height);
-                    this.canvasCtx.lineWidth = 2;
-                    this.canvasCtx.strokeStyle = 'rgba(37, 99, 235, 0.9)';
-                    this.canvasCtx.beginPath();
-                    this.canvasCtx.moveTo(0, centerY);
+                    const gradient = this.canvasCtx.createLinearGradient(0, 0, 0, height);
+                    gradient.addColorStop(0, 'rgba(56,189,248,0.95)');
+                    gradient.addColorStop(1, 'rgba(37,99,235,0.85)');
+                    this.canvasCtx.fillStyle = gradient;
 
-                    for (let i = 0; i < width; i++) {
-                        const wave1 = Math.sin(i * 0.02 + time);
-                        const wave2 = Math.sin(i * 0.06 - time);
-                        const y = centerY + (wave1 + wave2) * amplitude;
-                        this.canvasCtx.lineTo(i, y);
+                    for (let i = 0; i < barCount; i++) {
+                        const start = i * binsPerBar;
+                        let sum = 0;
+                        for (let j = 0; j < binsPerBar; j++) {
+                            sum += this.dataArray[start + j] || 0;
+                        }
+                        const value = sum / binsPerBar;
+                        this.smoothedBars[i] = this.smoothedBars[i] * 0.75 + value * 0.25;
+
+                        const barHeight = Math.max(2, (this.smoothedBars[i] / 255) * height);
+                        const x = i * (barWidth + barGap);
+                        const y = height - barHeight;
+                        const radius = Math.min(4, barWidth / 2, barHeight / 2);
+
+                        if (this.canvasCtx.roundRect) {
+                            this.canvasCtx.beginPath();
+                            this.canvasCtx.roundRect(x, y, barWidth, barHeight, radius);
+                            this.canvasCtx.fill();
+                        } else {
+                            this.canvasCtx.fillRect(x, y, barWidth, barHeight);
+                        }
                     }
-
-                    this.canvasCtx.stroke();
                     this.animationId = requestAnimationFrame(animate);
                 };
 
@@ -3167,7 +3206,12 @@
             stopVisualizer() {
                 cancelAnimationFrame(this.animationId);
                 this.animationId = null;
-                this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                if (this.canvasCtx && this.canvas) {
+                    this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                }
+                if (this.smoothedBars) {
+                    this.smoothedBars.fill(0);
+                }
             }
 
             resizeCanvas() {
