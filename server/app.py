@@ -177,7 +177,7 @@ def _load_prompts_data() -> dict[str, Any]:
 
 
 def _humanize_prompt_key(key: str) -> str:
-    cleaned = re.sub(r"[_\\s]+", " ", key).strip()
+    cleaned = re.sub(r"[_\s]+", " ", key).strip()
     return cleaned[:1].upper() + cleaned[1:] if cleaned else key
 
 
