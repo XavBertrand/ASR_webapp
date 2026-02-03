@@ -1406,6 +1406,51 @@ def register_routes(app: Flask) -> None:
 
         return jsonify({"ok": True})
 
+    @app.post("/api/runs/<run_id>/rerun-full")
+    @login_required
+    def rerun_full_pipeline(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        run_root = root / user_folder / "runs" / run_id
+        if not run_root.is_dir():
+            return json_error("Run introuvable", 404)
+        manifest_path = run_root / "manifest.json"
+        manifest = _load_manifest(manifest_path) or {}
+        status = manifest.get("status")
+        if status != "ready":
+            return json_error("Le run doit être prêt pour relancer le pipeline complet", 409)
+
+        meta_path = run_root / "meta.json"
+        meta = _load_meta(meta_path)
+        if not isinstance(meta, dict):
+            return json_error("Metadata introuvable", 404)
+
+        queue_dir_value = app.config.get("REPORTS_QUEUE_DIR") or ""
+        if not queue_dir_value.strip():
+            return json_error("File d'attente indisponible", 503)
+        queue_dir = Path(queue_dir_value).expanduser()
+        pending_dir = queue_dir / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+
+        meta["run_id"] = run_id
+        meta["user_folder"] = meta.get("user_folder") or user_folder
+        meta.pop("report_only", None)
+
+        stamp = _utcnow().strftime("%Y%m%dT%H%M%SZ")
+        job_name = f"{stamp}_{secrets.token_hex(2)}_{run_id}_meta.json"
+        job_path = pending_dir / job_name
+        job_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        apply_upload_permissions(str(job_path), is_dir=False, base_dir=app.config["REPORTS_ROOT"])
+
+        manifest["status"] = "queued"
+        manifest["updated_at"] = _utcnow().isoformat().replace("+00:00", "Z")
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        return jsonify({"ok": True})
+
     @app.get("/api/meeting-report-types")
     @login_required
     def meeting_report_types():

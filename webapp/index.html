@@ -2182,6 +2182,32 @@
                 }
             }
 
+            async rerunFullPipeline(report) {
+                const runId = report?.run_id || report?.id;
+                if (!runId) return;
+                const csrf = readCsrfCookie();
+                const bodyPayload = {};
+                if (report?.user_folder) bodyPayload.user_folder = report.user_folder;
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/rerun-full`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(bodyPayload)
+                    });
+                    if (!res.ok) {
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Relance impossible (${res.status})`;
+                        uiToast({ message, type: 'error' });
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                    uiToast({ message: 'Relance complète demandée.', type: 'success' });
+                } catch (err) {
+                    uiToast({ message: "Impossible de relancer le pipeline complet.", type: 'error' });
+                }
+            }
+
             async trashRun(runId, userFolder) {
                 if (!runId) return;
                 const csrf = readCsrfCookie();
@@ -2408,28 +2434,51 @@
                         menu.appendChild(deleteBtn);
                     } else {
                         const canRerun = report.status === 'ready';
-                        const rerunBtn = document.createElement('button');
-                        rerunBtn.className = 'history-menu-item';
-                        rerunBtn.type = 'button';
-                        rerunBtn.textContent = 'Relancer';
-                        rerunBtn.setAttribute('role', 'menuitem');
-                        rerunBtn.tabIndex = -1;
+                        const rerunReportBtn = document.createElement('button');
+                        rerunReportBtn.className = 'history-menu-item';
+                        rerunReportBtn.type = 'button';
+                        rerunReportBtn.textContent = 'Relancer le compte rendu';
+                        rerunReportBtn.setAttribute('role', 'menuitem');
+                        rerunReportBtn.tabIndex = -1;
                         if (!canRerun) {
-                            rerunBtn.setAttribute('aria-disabled', 'true');
-                            rerunBtn.disabled = true;
+                            rerunReportBtn.setAttribute('aria-disabled', 'true');
+                            rerunReportBtn.disabled = true;
                         }
-                        rerunBtn.addEventListener('click', async () => {
+                        rerunReportBtn.addEventListener('click', async () => {
                             this.closeHistoryMenu();
                             if (!canRerun) return;
                             const ok = await uiConfirm({
-                                title: 'Relancer le rapport',
-                                message: 'Relancer la génération du rapport ?',
-                                confirmText: 'Relancer'
+                                title: 'Relancer le compte rendu',
+                                message: 'Relancer uniquement la génération du compte rendu ?',
+                                confirmText: 'Relancer le compte rendu'
                             });
                             if (!ok) return;
                             this.rerunReport(report);
                         });
-                        menu.appendChild(rerunBtn);
+                        menu.appendChild(rerunReportBtn);
+
+                        const rerunFullBtn = document.createElement('button');
+                        rerunFullBtn.className = 'history-menu-item';
+                        rerunFullBtn.type = 'button';
+                        rerunFullBtn.textContent = 'Relancer le pipeline complet';
+                        rerunFullBtn.setAttribute('role', 'menuitem');
+                        rerunFullBtn.tabIndex = -1;
+                        if (!canRerun) {
+                            rerunFullBtn.setAttribute('aria-disabled', 'true');
+                            rerunFullBtn.disabled = true;
+                        }
+                        rerunFullBtn.addEventListener('click', async () => {
+                            this.closeHistoryMenu();
+                            if (!canRerun) return;
+                            const ok = await uiConfirm({
+                                title: 'Relancer le pipeline complet',
+                                message: 'Relancer tout le pipeline (diarisation, ASR, compte rendu) ?',
+                                confirmText: 'Relancer le pipeline'
+                            });
+                            if (!ok) return;
+                            this.rerunFullPipeline(report);
+                        });
+                        menu.appendChild(rerunFullBtn);
 
                         const renameBtn = document.createElement('button');
                         renameBtn.className = 'history-menu-item';
