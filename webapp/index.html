@@ -691,6 +691,11 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
         }
+        .modal-wide { width: min(640px, 100%); }
+        .modal-form { display: grid; gap: 12px; }
+        .modal-form .form-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .modal-form .field textarea { min-height: 90px; }
+        .meta-edit-actions { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
         .modal-btn {
             padding: 10px 12px;
             border-radius: 10px;
@@ -1435,6 +1440,38 @@
                 </div>
             </div>
         </div>
+    <div class="modal-backdrop" id="metaEditBackdrop" hidden>
+            <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="metaEditTitle" aria-describedby="metaEditMessage">
+                <div class="modal-title" id="metaEditTitle">Modifier les métadonnées</div>
+                <div class="modal-message" id="metaEditMessage">Ces informations seront utilisées lors des prochaines relances.</div>
+                <form class="modal-form" id="metaEditForm">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="metaEditMeetingReportType"><span>Type de compte rendu</span><span class="field-tag is-required">Requis</span></label>
+                            <select id="metaEditMeetingReportType"></select>
+                        </div>
+                        <div class="field">
+                            <label for="metaEditMeetingDate"><span>Date</span><span class="field-tag is-required">Requis</span></label>
+                            <input type="date" id="metaEditMeetingDate" required />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="metaEditSpeakerContext"><span>Intervenants</span><span class="field-tag">Optionnel</span></label>
+                        <textarea id="metaEditSpeakerContext" placeholder="Ex: Avocat avec client, experts, etc."></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="metaEditAsrPrompt"><span>Mots clés</span><span class="field-tag">Optionnel</span></label>
+                        <textarea id="metaEditAsrPrompt" placeholder="Tags, noms propres, vocabulaire spécifique."></textarea>
+                        <small>Séparez les mots clés par des virgules.</small>
+                    </div>
+                </form>
+                <div class="modal-actions meta-edit-actions">
+                <button class="modal-btn secondary" id="metaEditCancel" type="button">Annuler</button>
+                <button class="modal-btn secondary" id="metaEditSave" type="submit" form="metaEditForm">Enregistrer</button>
+                <button class="modal-btn primary" id="metaEditSaveRerun" type="button">Enregistrer + relancer pipeline</button>
+                </div>
+            </div>
+        </div>
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
     <script>
@@ -1486,6 +1523,10 @@
                 this.uploadErrorVisible = false;
                 this.trashArmed = false;
                 this.trashArmTimeout = null;
+                this.metaEditRun = null;
+                this.metaEditCleanup = null;
+                this.metaEditLastActive = null;
+                this.metaEditSaving = false;
 
                 this.initElements();
                 this.reportSortMode = this.historySortSelect?.value || this.reportSortMode;
@@ -1585,6 +1626,17 @@
                 this.fieldCaseName = document.getElementById('fieldCaseName');
                 this.fieldMeetingDate = document.getElementById('fieldMeetingDate');
                 this.fieldMeetingReportType = document.getElementById('fieldMeetingReportType');
+
+                // Metadata edit modal
+                this.metaEditBackdrop = document.getElementById('metaEditBackdrop');
+                this.metaEditForm = document.getElementById('metaEditForm');
+                this.metaEditCancel = document.getElementById('metaEditCancel');
+                this.metaEditSave = document.getElementById('metaEditSave');
+                this.metaEditSaveRerun = document.getElementById('metaEditSaveRerun');
+                this.metaEditMeetingReportType = document.getElementById('metaEditMeetingReportType');
+                this.metaEditMeetingDate = document.getElementById('metaEditMeetingDate');
+                this.metaEditSpeakerContext = document.getElementById('metaEditSpeakerContext');
+                this.metaEditAsrPrompt = document.getElementById('metaEditAsrPrompt');
             }
 
             bindEvents() {
@@ -1632,6 +1684,21 @@
                     this.historySortSelect.addEventListener('change', () => {
                         this.reportSortMode = this.historySortSelect.value || 'date_desc';
                         this.renderReports(this.lastReports);
+                    });
+                }
+
+                if (this.metaEditCancel) {
+                    this.metaEditCancel.addEventListener('click', () => this.closeMetadataEditor());
+                }
+                if (this.metaEditForm) {
+                    this.metaEditForm.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        this.saveMetadataEditor();
+                    });
+                }
+                if (this.metaEditSaveRerun) {
+                    this.metaEditSaveRerun.addEventListener('click', () => {
+                        this.saveMetadataEditor({ rerun: true });
                     });
                 }
                 document.addEventListener('click', (event) => this.handleHistoryMenuDocumentClick(event));
@@ -2182,9 +2249,10 @@
                 }
             }
 
-            async rerunFullPipeline(report) {
+            async rerunFullPipeline(report, options = {}) {
                 const runId = report?.run_id || report?.id;
                 if (!runId) return;
+                const successMessage = options.successMessage || 'Relance complète demandée.';
                 const csrf = readCsrfCookie();
                 const bodyPayload = {};
                 if (report?.user_folder) bodyPayload.user_folder = report.user_folder;
@@ -2202,9 +2270,242 @@
                         return;
                     }
                     await this.loadHistory({ silent: true });
-                    uiToast({ message: 'Relance complète demandée.', type: 'success' });
+                    uiToast({ message: successMessage, type: 'success' });
                 } catch (err) {
                     uiToast({ message: "Impossible de relancer le pipeline complet.", type: 'error' });
+                }
+            }
+
+            async openMetadataEditor(report) {
+                if (!this.metaEditBackdrop || !this.metaEditForm) return;
+                const runId = report?.run_id || report?.id;
+                if (!runId) return;
+                if (this.metaEditSave) this.metaEditSave.disabled = true;
+                if (this.metaEditSaveRerun) this.metaEditSaveRerun.disabled = true;
+                const data = await this.fetchRunMetadata(report);
+                if (!data) {
+                    if (this.metaEditSave) this.metaEditSave.disabled = false;
+                    if (this.metaEditSaveRerun) this.metaEditSaveRerun.disabled = false;
+                    return;
+                }
+                this.metaEditRun = { runId, user_folder: report?.user_folder || '' };
+                this.populateMetadataEditor(data, report);
+                if (this.metaEditSave) this.metaEditSave.disabled = false;
+                if (this.metaEditSaveRerun) this.metaEditSaveRerun.disabled = false;
+                this.showMetadataEditor();
+            }
+
+            async fetchRunMetadata(report) {
+                const runId = report?.run_id || report?.id;
+                if (!runId) return null;
+                const params = new URLSearchParams();
+                if (report?.user_folder) params.set('user_folder', report.user_folder);
+                const query = params.toString();
+                const url = this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/metadata${query ? `?${query}` : ''}`);
+                try {
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return null;
+                    }
+                    if (!res.ok) {
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Chargement impossible (${res.status})`;
+                        uiToast({ message, type: 'error' });
+                        return null;
+                    }
+                    return await res.json();
+                } catch (err) {
+                    uiToast({ message: "Impossible de charger les métadonnées.", type: 'error' });
+                    return null;
+                }
+            }
+
+            populateMetadataEditor(data, report) {
+                const meetingType = (data?.meeting_report_type || report?.meeting_report_type || this.defaultMeetingReportType || '').trim();
+                const meetingDate = (data?.meeting_date || report?.meeting_date || this.getTodayIso()).trim();
+                const speakerContext = data?.speaker_context || '';
+                const asrPrompt = data?.asr_prompt || '';
+
+                this.renderMetaEditReportTypeOptions(meetingType);
+                if (this.metaEditMeetingReportType) {
+                    this.metaEditMeetingReportType.value = meetingType || this.defaultMeetingReportType || '';
+                }
+                if (this.metaEditMeetingDate) this.metaEditMeetingDate.value = meetingDate;
+                if (this.metaEditSpeakerContext) this.metaEditSpeakerContext.value = speakerContext;
+                if (this.metaEditAsrPrompt) this.metaEditAsrPrompt.value = asrPrompt;
+            }
+
+            renderMetaEditReportTypeOptions(currentKey) {
+                if (!this.metaEditMeetingReportType) return;
+                const select = this.metaEditMeetingReportType;
+                select.textContent = '';
+
+                let types = Array.isArray(this.reportTypes) ? this.reportTypes.slice() : [];
+                if (!types.length && this.inputMeetingReportType) {
+                    types = Array.from(this.inputMeetingReportType.options)
+                        .map((opt) => opt.value)
+                        .filter(Boolean);
+                }
+
+                const currentLabel = this.reportTypeLabels[currentKey] || currentKey;
+                if (currentKey && !types.includes(currentKey)) {
+                    const opt = document.createElement('option');
+                    opt.value = currentKey;
+                    opt.textContent = `${currentLabel} (inconnu)`;
+                    select.appendChild(opt);
+                }
+
+                types.forEach((key) => {
+                    if (!key) return;
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = this.reportTypeLabels[key] || key;
+                    select.appendChild(opt);
+                });
+            }
+
+            showMetadataEditor() {
+                const backdrop = this.metaEditBackdrop;
+                if (!backdrop) return;
+                const lastActive = document.activeElement;
+                this.metaEditLastActive = lastActive;
+
+                const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+                const getFocusable = () =>
+                    Array.from(backdrop.querySelectorAll(focusableSelector)).filter((el) => !el.disabled && !el.getAttribute('aria-hidden'));
+
+                const trapFocus = (event) => {
+                    if (event.key !== 'Tab') return;
+                    const focusable = getFocusable();
+                    if (!focusable.length) return;
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                };
+
+                const onKeydown = (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.closeMetadataEditor();
+                        return;
+                    }
+                    trapFocus(event);
+                };
+
+                const onBackdropClick = (event) => {
+                    if (event.target === backdrop) this.closeMetadataEditor();
+                };
+
+                this.metaEditCleanup = () => {
+                    document.removeEventListener('keydown', onKeydown);
+                    backdrop.removeEventListener('click', onBackdropClick);
+                };
+
+                backdrop.hidden = false;
+                backdrop.classList.remove('is-open');
+                requestAnimationFrame(() => backdrop.classList.add('is-open'));
+                const focusTarget = this.metaEditMeetingReportType || this.metaEditMeetingDate || this.metaEditSave;
+                if (focusTarget && typeof focusTarget.focus === 'function') {
+                    focusTarget.focus();
+                }
+
+                document.addEventListener('keydown', onKeydown);
+                backdrop.addEventListener('click', onBackdropClick);
+            }
+
+            closeMetadataEditor() {
+                const backdrop = this.metaEditBackdrop;
+                if (!backdrop) return;
+                if (this.metaEditCleanup) this.metaEditCleanup();
+                this.metaEditCleanup = null;
+                backdrop.classList.remove('is-open');
+                setTimeout(() => {
+                    backdrop.hidden = true;
+                }, 160);
+                const lastActive = this.metaEditLastActive;
+                this.metaEditLastActive = null;
+                if (lastActive && typeof lastActive.focus === 'function') {
+                    lastActive.focus();
+                }
+                this.metaEditRun = null;
+            }
+
+            async saveMetadataEditor(options = {}) {
+                const { rerun = false } = options;
+                if (this.metaEditSaving) return;
+                if (!this.metaEditRun) return;
+                const meetingReportType = (this.metaEditMeetingReportType?.value || '').trim();
+                const meetingDate = (this.metaEditMeetingDate?.value || '').trim();
+                if (!meetingReportType) {
+                    uiToast({ message: 'Type de compte rendu requis.', type: 'error' });
+                    return;
+                }
+                if (!meetingDate) {
+                    uiToast({ message: 'Date requise.', type: 'error' });
+                    return;
+                }
+                const payload = {
+                    meeting_report_type: meetingReportType,
+                    meeting_date: meetingDate,
+                    speaker_context: (this.metaEditSpeakerContext?.value || '').trim(),
+                    asr_prompt: (this.metaEditAsrPrompt?.value || '').trim()
+                };
+                if (this.metaEditRun.user_folder) payload.user_folder = this.metaEditRun.user_folder;
+
+                const runId = this.metaEditRun.runId;
+                const csrf = readCsrfCookie();
+                this.metaEditSaving = true;
+                if (this.metaEditSave) {
+                    this.metaEditSave.disabled = true;
+                    this.metaEditSave.textContent = 'Enregistrement...';
+                }
+                if (this.metaEditSaveRerun) {
+                    this.metaEditSaveRerun.disabled = true;
+                    this.metaEditSaveRerun.textContent = rerun ? 'Enregistrement + relance...' : 'Enregistrer + relancer pipeline';
+                }
+                try {
+                    const res = await fetch(this.buildUrl(`/api/runs/${encodeURIComponent(runId)}/metadata`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) {
+                        const errorPayload = await res.json().catch(() => ({}));
+                        const message = errorPayload.error || `Mise à jour impossible (${res.status})`;
+                        uiToast({ message, type: 'error' });
+                        return;
+                    }
+                    await this.loadHistory({ silent: true });
+                    if (rerun) {
+                        this.closeMetadataEditor();
+                        await this.rerunFullPipeline(
+                            { run_id: runId, user_folder: this.metaEditRun.user_folder },
+                            { successMessage: 'Métadonnées mises à jour et relance demandée.' }
+                        );
+                    } else {
+                        uiToast({ message: 'Métadonnées mises à jour.', type: 'success' });
+                        this.closeMetadataEditor();
+                    }
+                } catch (err) {
+                    uiToast({ message: "Impossible de mettre à jour les métadonnées.", type: 'error' });
+                } finally {
+                    this.metaEditSaving = false;
+                    if (this.metaEditSave) {
+                        this.metaEditSave.disabled = false;
+                        this.metaEditSave.textContent = 'Enregistrer';
+                    }
+                    if (this.metaEditSaveRerun) {
+                        this.metaEditSaveRerun.disabled = false;
+                        this.metaEditSaveRerun.textContent = 'Enregistrer + relancer pipeline';
+                    }
                 }
             }
 
@@ -2433,7 +2734,7 @@
                         });
                         menu.appendChild(deleteBtn);
                     } else {
-                        const canRerun = report.status === 'ready';
+                        const canRerun = report.status === 'ready' || report.status === 'failed';
                         const rerunReportBtn = document.createElement('button');
                         rerunReportBtn.className = 'history-menu-item';
                         rerunReportBtn.type = 'button';
@@ -2479,6 +2780,23 @@
                             this.rerunFullPipeline(report);
                         });
                         menu.appendChild(rerunFullBtn);
+
+                        const editMetaBtn = document.createElement('button');
+                        editMetaBtn.className = 'history-menu-item';
+                        editMetaBtn.type = 'button';
+                        editMetaBtn.textContent = 'Modifier les métadonnées';
+                        editMetaBtn.setAttribute('role', 'menuitem');
+                        editMetaBtn.tabIndex = -1;
+                        if (!canRerun) {
+                            editMetaBtn.setAttribute('aria-disabled', 'true');
+                            editMetaBtn.disabled = true;
+                        }
+                        editMetaBtn.addEventListener('click', () => {
+                            this.closeHistoryMenu();
+                            if (!canRerun) return;
+                            this.openMetadataEditor(report);
+                        });
+                        menu.appendChild(editMetaBtn);
 
                         const renameBtn = document.createElement('button');
                         renameBtn.className = 'history-menu-item';

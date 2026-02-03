@@ -410,6 +410,25 @@ def _set_run_case_name(run_root: Path, case_name: str | None) -> None:
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _update_run_metadata_fields(run_root: Path, updates: dict[str, Any]) -> None:
+    manifest_path = run_root / "manifest.json"
+    manifest = _load_manifest(manifest_path) if manifest_path.exists() else None
+    if isinstance(manifest, dict):
+        meta = manifest.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.update(updates)
+        manifest["meta"] = meta
+        manifest["updated_at"] = _utcnow().isoformat().replace("+00:00", "Z")
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    meta_path = run_root / "meta.json"
+    meta_file = _load_meta(meta_path) if meta_path.exists() else None
+    if isinstance(meta_file, dict):
+        meta_file.update(updates)
+        meta_path.write_text(json.dumps(meta_file, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _collect_run_entries(
     runs_root: Path,
     root: Path,
@@ -1361,6 +1380,78 @@ def register_routes(app: Flask) -> None:
         _set_run_case_name(run_root, case_name or None)
         return jsonify({"ok": True, "case_name": case_name})
 
+    @app.get("/api/runs/<run_id>/metadata")
+    @login_required
+    def get_run_metadata(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        user_folder = _resolve_user_folder({"user_folder": request.args.get("user_folder")})
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        run_root = root / user_folder / "runs" / run_id
+        if not run_root.is_dir():
+            return json_error("Run introuvable", 404)
+        meta_path = run_root / "meta.json"
+        meta = _load_meta(meta_path)
+        if not isinstance(meta, dict):
+            return json_error("Metadata introuvable", 404)
+        return jsonify(
+            {
+                "meeting_report_type": meta.get("meeting_report_type") or "",
+                "meeting_date": meta.get("meeting_date") or "",
+                "speaker_context": meta.get("speaker_context") or "",
+                "asr_prompt": meta.get("asr_prompt") or "",
+            }
+        )
+
+    @app.post("/api/runs/<run_id>/metadata")
+    @login_required
+    def update_run_metadata(run_id: str):
+        if not _is_safe_run_id(run_id):
+            return json_error("Identifiant invalide", 400)
+        payload = request.get_json(silent=True) or request.form or {}
+        user_folder = _resolve_user_folder(payload)
+        root = Path(app.config["REPORTS_ROOT"]).expanduser()
+        run_root = root / user_folder / "runs" / run_id
+        if not run_root.is_dir():
+            return json_error("Run introuvable", 404)
+        manifest_path = run_root / "manifest.json"
+        manifest = _load_manifest(manifest_path) or {}
+        status = manifest.get("status") or "ready"
+        if status in {"queued", "processing", "pending"}:
+            return json_error("Impossible de modifier un run en cours", 409)
+
+        meta_path = run_root / "meta.json"
+        meta = _load_meta(meta_path)
+        if not isinstance(meta, dict):
+            return json_error("Metadata introuvable", 404)
+
+        meeting_report_type = (payload.get("meeting_report_type") or "").strip()
+        if not meeting_report_type:
+            return json_error("meeting_report_type requis", 400)
+        meeting_report_types = [entry["key"] for entry in get_meeting_report_types() if entry.get("key")]
+        if meeting_report_types and meeting_report_type not in meeting_report_types:
+            return json_error("meeting_report_type invalide", 400)
+
+        raw_meeting_date = (payload.get("meeting_date") or "").strip()
+        if not raw_meeting_date:
+            return json_error("meeting_date requis", 400)
+        try:
+            meeting_date = datetime.strptime(raw_meeting_date, "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            return json_error("meeting_date doit respecter le format YYYY-MM-DD", 400)
+
+        speaker_context = (payload.get("speaker_context") or "").strip()
+        asr_prompt = (payload.get("asr_prompt") or "").strip()
+
+        updates = {
+            "meeting_report_type": meeting_report_type,
+            "meeting_date": meeting_date,
+            "speaker_context": speaker_context,
+            "asr_prompt": asr_prompt,
+        }
+        _update_run_metadata_fields(run_root, updates)
+        return jsonify({"ok": True})
+
     @app.post("/api/runs/<run_id>/rerun-report")
     @login_required
     def rerun_report(run_id: str):
@@ -1375,8 +1466,8 @@ def register_routes(app: Flask) -> None:
         manifest_path = run_root / "manifest.json"
         manifest = _load_manifest(manifest_path) or {}
         status = manifest.get("status")
-        if status != "ready":
-            return json_error("Le run doit être prêt pour relancer le rapport", 409)
+        if status not in {"ready", "failed"}:
+            return json_error("Le run doit être prêt ou en échec pour relancer le rapport", 409)
 
         meta_path = run_root / "meta.json"
         meta = _load_meta(meta_path)
@@ -1420,8 +1511,8 @@ def register_routes(app: Flask) -> None:
         manifest_path = run_root / "manifest.json"
         manifest = _load_manifest(manifest_path) or {}
         status = manifest.get("status")
-        if status != "ready":
-            return json_error("Le run doit être prêt pour relancer le pipeline complet", 409)
+        if status not in {"ready", "failed"}:
+            return json_error("Le run doit être prêt ou en échec pour relancer le pipeline complet", 409)
 
         meta_path = run_root / "meta.json"
         meta = _load_meta(meta_path)
