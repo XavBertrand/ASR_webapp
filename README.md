@@ -3,7 +3,7 @@
 Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with application-level authentication (sessions, RBAC, optional admin 2FA) and an optional global “gateway” BasicAuth handled by Caddy.
 
 ## Roles and usage
-- **Admin**: logs in via `/login`, enables 2FA if required, manages users at `/admin/users` (create, reset password, enable/disable), reviews audit at `/admin/audit`, can regenerate recovery codes at `/admin/2fa/setup`.
+- **Admin**: logs in via `/login`, enables 2FA if required, manages users at `/admin/users` (create, reset password, enable/disable), edits meeting report prompts at `/admin/prompts`, reviews audit at `/admin/audit`, can regenerate recovery codes at `/admin/2fa/setup`.
 - **User**: logs in via `/login` then uses the main UI to upload audio/metadata. No admin access.
 
 ## Authentication flow
@@ -20,6 +20,7 @@ Flask/Gunicorn + Caddy reverse proxy for the Jetson ASR service, with applicatio
 - Security: `REQUIRE_ADMIN_2FA` (true/false), `TOTP_ENC_KEY` (Fernet key), `SESSION_COOKIE_SAMESITE` (default Lax), `SESSION_COOKIE_SECURE` (default true), `SESSION_LIFETIME_HOURS` (default 12), `RATELIMIT_STORAGE_URL` (`memory://` by default; set `redis://...` for shared rate limits), `WEBAPP_ENV` (set to `production` to surface stricter warnings), `TRUST_PROXY_HEADERS` (true only when behind a trusted reverse proxy).
 - Uploads: `UPLOAD_FOLDER` (./recordings default), `MAX_CONTENT_LENGTH_MB` (default 100), `UPLOAD_UID` / `UPLOAD_GID` to chown uploads.
 - Reports: `REPORTS_ROOT` (defaults to `UPLOAD_FOLDER`), `REPORTS_QUEUE_DIR` (defaults to `<REPORTS_ROOT>/queue`) for the History tab status.
+- Prompt config: `ASR_CONFIG_DIR` (baseline prompts path), optional `ASR_PROMPTS_ACTIVE_PATH` and `ASR_PROMPTS_PREVIOUS_PATH` (admin-edited current/previous prompt JSONs; default under `recordings/.webapp/prompts/`).
 - Gateway BasicAuth (Caddy, optional, global): `GATEWAY_BASICAUTH_USER`, `GATEWAY_BASICAUTH_HASHED_PASSWORD` (from `caddy hash-password --plaintext '...'`). If empty, the Caddy lock is disabled.
 - Gunicorn: `GUNICORN_BIND_LOCAL_ONLY` (default true in production; forces bind on loopback), `GUNICORN_HOST` (default `127.0.0.1` — keep loopback when Caddy is in front), `GUNICORN_PORT` (default 8000), `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_TIMEOUT`.
 
@@ -37,6 +38,7 @@ uv run python -m server.manage enable-user --username bob
 - `/`: main webapp (upload). “Administration” link only appears for admins.
 - `/` History tab: lists the current user’s report PDFs from `<REPORTS_ROOT>/<user>/output/pdf/`, with queue status and direct download.
 - `/admin/users`: list users, create, reset password, toggle active/inactive.
+- `/admin/prompts`: edit Mistral prompt JSON, add/remove report types, save active version, or reset to baseline.
 - `/admin/audit`: browse audit actions with simple filters.
 - `/admin/2fa/setup`: TOTP secret/URI + recovery codes; validate OTP to enable 2FA; regenerate recovery codes explicitly (old codes invalidated).
 - `/health`: public.

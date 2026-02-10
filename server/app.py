@@ -18,6 +18,7 @@ from flask import (
     Flask,
     abort,
     g,
+    has_app_context,
     jsonify,
     redirect,
     render_template,
@@ -142,12 +143,15 @@ DEFAULT_MEETING_REPORT_LABELS: dict[str, str] = {
     "entretien_client_particulier_contentieux": "Client particulier (contentieux)",
     "entretien_client_professionnel_conseil": "Client professionnel (conseil)",
     "entretien_client_professionnel_contentieux": "Client professionnel (contentieux)",
+    "compte_rendu_association": "Compte rendu association",
 }
+PROMPT_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,127}$")
 _PROMPTS_CACHE: dict[str, Any] = {}
+_PROMPTS_CACHE_PATH: str | None = None
 _PROMPTS_MTIME: float | None = None
 
 
-def _resolve_prompts_path() -> Path | None:
+def _resolve_prompts_baseline_path() -> Path | None:
     config_dir = os.environ.get("ASR_CONFIG_DIR", "").strip()
     if not config_dir:
         return None
@@ -157,18 +161,166 @@ def _resolve_prompts_path() -> Path | None:
     return path
 
 
+def _resolve_prompts_active_path() -> Path:
+    custom = os.environ.get("ASR_PROMPTS_ACTIVE_PATH", "").strip()
+    if custom:
+        path = Path(custom).expanduser()
+    else:
+        reports_root = DEFAULT_REPORTS_ROOT
+        if has_app_context():
+            reports_root = current_app.config.get("REPORTS_ROOT") or current_app.config.get("UPLOAD_FOLDER") or reports_root
+        path = Path(reports_root).expanduser() / ".webapp" / "prompts" / "mistral_prompts.active.json"
+    if not path.is_absolute():
+        path = (ROOT_DIR / path).resolve()
+    return path
+
+
+def _resolve_prompts_previous_path(active_path: Path | None = None) -> Path:
+    custom = os.environ.get("ASR_PROMPTS_PREVIOUS_PATH", "").strip()
+    if custom:
+        path = Path(custom).expanduser()
+        if not path.is_absolute():
+            path = (ROOT_DIR / path).resolve()
+        return path
+    active = active_path or _resolve_prompts_active_path()
+    return active.with_name("mistral_prompts.previous.json")
+
+
+def _resolve_effective_prompts_path() -> tuple[Path | None, str]:
+    active = _resolve_prompts_active_path()
+    if active.exists():
+        return active, "active"
+    baseline = _resolve_prompts_baseline_path()
+    if baseline and baseline.exists():
+        return baseline, "baseline"
+    return None, "none"
+
+
+def _read_prompts_file(path: Path | None) -> dict[str, Any]:
+    if not path or not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Le fichier de prompts doit contenir un objet JSON")
+    return data
+
+
+def _normalize_prompt_entry(key: str, payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"Prompt '{key}' invalide: objet JSON attendu")
+    model = payload.get("model")
+    system = payload.get("system")
+    user_prefix = payload.get("user_prefix")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"Prompt '{key}': champ 'model' requis")
+    if not isinstance(system, str) or not system.strip():
+        raise ValueError(f"Prompt '{key}': champ 'system' requis")
+    if not isinstance(user_prefix, str) or not user_prefix.strip():
+        raise ValueError(f"Prompt '{key}': champ 'user_prefix' requis")
+
+    normalized = dict(payload)
+    normalized["model"] = model.strip()
+    normalized["system"] = system
+    normalized["user_prefix"] = user_prefix
+    for opt in ("label", "title"):
+        if opt in normalized and normalized[opt] is not None and not isinstance(normalized[opt], str):
+            raise ValueError(f"Prompt '{key}': champ '{opt}' doit être une chaîne")
+    return normalized
+
+
+def normalize_prompts_payload(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict) or not data:
+        raise ValueError("Le payload prompts doit être un objet JSON non vide")
+    normalized: dict[str, Any] = {}
+    for raw_key, payload in data.items():
+        if not isinstance(raw_key, str):
+            raise ValueError("Chaque clé de type de compte-rendu doit être une chaîne")
+        key = raw_key.strip()
+        if not key:
+            raise ValueError("Clé de type vide")
+        if not PROMPT_KEY_RE.fullmatch(key):
+            raise ValueError(f"Clé de type invalide: '{raw_key}' (attendu: lettres/chiffres/_/-)")
+        if key in normalized:
+            raise ValueError(f"Clé de type dupliquée: '{key}'")
+        normalized[key] = _normalize_prompt_entry(key, payload)
+    return normalized
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def _summarize_prompt_changes(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    before_keys = set(before.keys())
+    after_keys = set(after.keys())
+    added = sorted(after_keys - before_keys)
+    removed = sorted(before_keys - after_keys)
+    updated = sorted(key for key in (before_keys & after_keys) if before.get(key) != after.get(key))
+    return {
+        "added": added,
+        "removed": removed,
+        "updated": updated,
+        "counts": {
+            "added": len(added),
+            "removed": len(removed),
+            "updated": len(updated),
+            "total_after": len(after_keys),
+        },
+    }
+
+
+def _invalidate_prompts_cache() -> None:
+    global _PROMPTS_CACHE, _PROMPTS_CACHE_PATH, _PROMPTS_MTIME
+    _PROMPTS_CACHE = {}
+    _PROMPTS_CACHE_PATH = None
+    _PROMPTS_MTIME = None
+
+
+def get_prompts_admin_snapshot() -> dict[str, Any]:
+    active_path = _resolve_prompts_active_path()
+    previous_path = _resolve_prompts_previous_path(active_path)
+    baseline_path = _resolve_prompts_baseline_path()
+    effective_path, source = _resolve_effective_prompts_path()
+    prompts = _load_prompts_data()
+    updated_at = None
+    if effective_path and effective_path.exists():
+        try:
+            updated_at = _iso_from_epoch(effective_path.stat().st_mtime)
+        except OSError:
+            updated_at = None
+    return {
+        "prompts": prompts,
+        "source": source,
+        "default": next(iter(prompts.keys()), ""),
+        "types": get_meeting_report_types(),
+        "updated_at": updated_at,
+        "paths": {
+            "baseline": str(baseline_path) if baseline_path else None,
+            "active": str(active_path),
+            "previous": str(previous_path),
+        },
+        "active_exists": active_path.exists(),
+        "previous_exists": previous_path.exists(),
+        "baseline_exists": bool(baseline_path and baseline_path.exists()),
+    }
+
+
 def _load_prompts_data() -> dict[str, Any]:
-    global _PROMPTS_CACHE, _PROMPTS_MTIME
-    path = _resolve_prompts_path()
+    global _PROMPTS_CACHE, _PROMPTS_CACHE_PATH, _PROMPTS_MTIME
+    path, _ = _resolve_effective_prompts_path()
     if not path or not path.exists():
         return {}
     try:
         mtime = path.stat().st_mtime
-        if _PROMPTS_CACHE and _PROMPTS_MTIME == mtime:
+        if _PROMPTS_CACHE and _PROMPTS_MTIME == mtime and _PROMPTS_CACHE_PATH == str(path):
             return _PROMPTS_CACHE
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = _read_prompts_file(path)
         if isinstance(data, dict):
             _PROMPTS_CACHE = data
+            _PROMPTS_CACHE_PATH = str(path)
             _PROMPTS_MTIME = mtime
             return data
     except Exception as exc:
@@ -1651,6 +1803,95 @@ def register_routes(app: Flask) -> None:
             return json_error("Run introuvable", 404)
         shutil.rmtree(str(trash_root))
         return jsonify({"ok": True})
+
+    @app.get("/admin/prompts")
+    @admin_required
+    def admin_prompts_page():
+        return render_template("admin_prompts.html", csrf_token=g.csrf_token)
+
+    @app.get("/api/admin/prompts")
+    @admin_required
+    def admin_prompts_get():
+        try:
+            return jsonify(get_prompts_admin_snapshot())
+        except Exception as exc:
+            logger.error("Lecture des prompts admin impossible: %s", exc)
+            return json_error("Impossible de lire les prompts", 500)
+
+    @app.put("/api/admin/prompts")
+    @admin_required
+    @limiter.limit("20/hour")
+    def admin_prompts_save():
+        payload = request.get_json(silent=True) or {}
+        raw_prompts = payload.get("prompts", payload)
+        try:
+            new_prompts = normalize_prompts_payload(raw_prompts)
+        except ValueError as exc:
+            return json_error(str(exc), 400)
+
+        active_path = _resolve_prompts_active_path()
+        previous_path = _resolve_prompts_previous_path(active_path)
+        before_prompts: dict[str, Any] = {}
+        try:
+            if active_path.exists():
+                before_prompts = _read_prompts_file(active_path)
+            else:
+                before_prompts = _load_prompts_data()
+            if before_prompts and before_prompts != new_prompts:
+                _atomic_write_json(previous_path, before_prompts)
+                apply_upload_permissions(str(previous_path.parent), is_dir=True, base_dir=app.config["REPORTS_ROOT"])
+                apply_upload_permissions(str(previous_path), is_dir=False, base_dir=app.config["REPORTS_ROOT"])
+            _atomic_write_json(active_path, new_prompts)
+            apply_upload_permissions(str(active_path.parent), is_dir=True, base_dir=app.config["REPORTS_ROOT"])
+            apply_upload_permissions(str(active_path), is_dir=False, base_dir=app.config["REPORTS_ROOT"])
+        except Exception as exc:
+            logger.error("Sauvegarde des prompts admin impossible: %s", exc)
+            return json_error("Impossible de sauvegarder les prompts", 500)
+
+        _invalidate_prompts_cache()
+        log_action(
+            action="admin_prompts_updated",
+            actor=g.current_user,
+            metadata=_summarize_prompt_changes(before_prompts, new_prompts),
+            ip=client_ip(),
+            user_agent=request.headers.get("User-Agent"),
+        )
+        return jsonify(get_prompts_admin_snapshot())
+
+    @app.post("/api/admin/prompts/reset")
+    @admin_required
+    @limiter.limit("10/hour")
+    def admin_prompts_reset():
+        active_path = _resolve_prompts_active_path()
+        previous_path = _resolve_prompts_previous_path(active_path)
+        baseline_path = _resolve_prompts_baseline_path()
+        if not baseline_path or not baseline_path.exists():
+            return json_error("Baseline des prompts introuvable", 404)
+
+        had_active = active_path.exists()
+        previous_written = False
+        try:
+            if had_active:
+                active_prompts = _read_prompts_file(active_path)
+                if active_prompts:
+                    _atomic_write_json(previous_path, active_prompts)
+                    apply_upload_permissions(str(previous_path.parent), is_dir=True, base_dir=app.config["REPORTS_ROOT"])
+                    apply_upload_permissions(str(previous_path), is_dir=False, base_dir=app.config["REPORTS_ROOT"])
+                    previous_written = True
+                active_path.unlink(missing_ok=True)
+        except Exception as exc:
+            logger.error("Reset des prompts admin impossible: %s", exc)
+            return json_error("Impossible de réinitialiser les prompts", 500)
+
+        _invalidate_prompts_cache()
+        log_action(
+            action="admin_prompts_reset",
+            actor=g.current_user,
+            metadata={"had_active": had_active, "previous_written": previous_written},
+            ip=client_ip(),
+            user_agent=request.headers.get("User-Agent"),
+        )
+        return jsonify(get_prompts_admin_snapshot())
 
     @app.get("/admin/users")
     @admin_required
