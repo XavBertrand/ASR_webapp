@@ -139,11 +139,17 @@ def test_templates_include_visual_shell(client):
     assert "app_shell.css" in admin_users_html
     assert 'class="page-admin"' in admin_users_html
     assert 'class="topbar"' in admin_users_html
+    assert '/admin/prompts' in admin_users_html
 
     admin_2fa_resp = client.get("/admin/2fa/setup")
     admin_2fa_html = admin_2fa_resp.get_data(as_text=True)
     assert "app_shell.css" in admin_2fa_html
     assert 'class="modal-backdrop"' in admin_2fa_html
+
+    admin_prompts_resp = client.get("/admin/prompts")
+    admin_prompts_html = admin_prompts_resp.get_data(as_text=True)
+    assert "Prompts Mistral" in admin_prompts_html
+    assert 'id="promptsJson"' in admin_prompts_html
 
 
 def test_csrf_blocks_admin_post(client):
@@ -190,6 +196,85 @@ def test_create_user_reset_password_and_login(client, app):
     with app.app_context():
         assert AuditLog.query.filter_by(action="create_user").count() >= 1
         assert AuditLog.query.filter_by(action="reset_password").count() >= 1
+
+
+def test_admin_prompts_roundtrip(tmp_path, monkeypatch):
+    config_dir = tmp_path / "asr_cfg"
+    config_dir.mkdir()
+    baseline_prompts = {
+        "entretien_collaborateur": {
+            "model": "mistral-large-2512",
+            "label": "Entretien collaborateur",
+            "system": "System baseline",
+            "user_prefix": "DATE: {meeting_date}",
+        }
+    }
+    (config_dir / "mistral_prompts.json").write_text(
+        json.dumps(baseline_prompts, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    app = build_app(
+        tmp_path,
+        monkeypatch,
+        extra_env={"ASR_CONFIG_DIR": str(config_dir)},
+        config={"REPORTS_ROOT": str(tmp_path / "uploads")},
+    )
+    client = app.test_client()
+
+    login_resp = login(client, "admin", "SuperSecureAdmin!")
+    assert login_resp.status_code in (302, 200)
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+
+    initial = client.get("/api/admin/prompts")
+    assert initial.status_code == 200
+    initial_data = initial.get_json()
+    assert initial_data["source"] == "baseline"
+    assert initial_data["prompts"]["entretien_collaborateur"]["model"] == "mistral-large-2512"
+    assert initial_data["active_exists"] is False
+
+    updated_prompts = {
+        **baseline_prompts,
+        "compte_rendu_association": {
+            "model": "mistral-large-2512",
+            "label": "Association",
+            "system": "System association",
+            "user_prefix": "DATE: {meeting_date}",
+        },
+    }
+    saved = client.put(
+        "/api/admin/prompts",
+        json={"prompts": updated_prompts},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert saved.status_code == 200
+    saved_data = saved.get_json()
+    assert saved_data["source"] == "active"
+    assert saved_data["active_exists"] is True
+    assert "compte_rendu_association" in saved_data["prompts"]
+
+    meeting_types = client.get("/api/meeting-report-types")
+    assert meeting_types.status_code == 200
+    types_data = meeting_types.get_json()
+    keys = {entry["key"] for entry in types_data["types"]}
+    assert "compte_rendu_association" in keys
+
+    active_path = tmp_path / "uploads" / ".webapp" / "prompts" / "mistral_prompts.active.json"
+    previous_path = tmp_path / "uploads" / ".webapp" / "prompts" / "mistral_prompts.previous.json"
+    assert active_path.exists()
+    assert previous_path.exists()
+
+    reset = client.post(
+        "/api/admin/prompts/reset",
+        json={},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert reset.status_code == 200
+    reset_data = reset.get_json()
+    assert reset_data["source"] == "baseline"
+    assert reset_data["active_exists"] is False
+    assert not active_path.exists()
 
 
 def test_upload_requires_login_and_works(client, app, tmp_path):
